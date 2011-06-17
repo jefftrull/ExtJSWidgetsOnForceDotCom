@@ -242,7 +242,8 @@
                 fieldlabels = [],
                 allowblank = [],
                 modifiable = [],
-                sortable = [];
+                sortable = [],
+                picklistData = [];
             var fields = "{!fields}";
             var fieldlist = fields.split(',');
             var objfields = describeResult[0].fields;
@@ -268,7 +269,20 @@
                 // have to do string compares later :(
                 modifiable.push(objfield.createable || objfield.updateable);
                 sortable.push(objfield.sortable);
-                // TBD implement picklist editor by creating an ArrayStore to supply values
+                if (objfield.type == "picklist") {
+                	picklistData[i] = [];
+                	// collect permitted data values from field describe results
+                	for (plval in objfield.picklistValues) {
+                		var pickvaldesc = objfield.picklistValues[plval];
+                		if (pickvaldesc.active) {
+                			picklistData[i].push([pickvaldesc.label, pickvaldesc.value]);
+                		}
+                	}
+                	if (objfield.nillable) {
+                		// allow blank as an option
+                		picklistData[i].push(["", null]);
+                	}
+                }
             }
             // create the Store
             var extfields = [];
@@ -327,7 +341,19 @@
                             allowBlank: allowblank[i]
                         });
                     }
-                } else {
+                } else if (modifiable[i] && (fieldtypes[i] == "picklist")) {
+                	// modifiable picklists will use a ComboBox but otherwise we'll use text (default)
+                	col.editor = {xtype: 		 'combo',
+                				  triggerAction: 'all',   // not sure what this does!
+                				  displayField:  'display',
+                				  valueField:	 'value',
+                				  mode:          'local',
+                				  store:		 new Ext.data.ArrayStore({
+                				  				 	fields: ['display', 'value'],
+                				  				 	data: picklistData[i]
+                				  				 })
+                				 };
+               } else {
                     // default xtype is OK
                     if (modifiable[i] == "true") {
                         // fall back on TextField, but use validators if possible
