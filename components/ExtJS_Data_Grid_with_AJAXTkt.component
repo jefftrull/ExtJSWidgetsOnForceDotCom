@@ -1,0 +1,433 @@
+<apex:component >
+    <!-- A Visualforce component implementing an ExtJS editable grid backed by a store wrapping an SObject -->
+    <!-- Jeff Trull 9/17/2010 -->
+    <apex:attribute name="object" type="Object" description="sObject to generate a grid for" required="true"/>
+    <apex:attribute name="fields" type="String[]" description="list of fields to display" required="true"/>
+    <apex:attribute name="minimized" type="Boolean" description="whether to initially render the grid in minimized state" default="false"/>
+    <apex:attribute name="rows" type="int" description="how many rows to display in grid" default="19"/>
+    <!-- load AJAX Toolkit -->
+    <script type="text/javascript">
+    var __sfdcSessionId = '{!GETSESSIONID()}';
+    </script>
+    <script src="../../soap/ajax/19.0/connection.js" type="text/javascript"></script>
+
+    <!-- load ExtJS -->
+    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.3.1/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/adapter/ext/ext-base.js"/>
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/ext-all.js"/>       
+    <script type="text/javascript">
+        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.3.1/resources/images/default/s.gif"
+    </script>
+
+    <!-- Define proxy class -->
+    <script type="text/javascript">
+        // Inherit from DirectProxy, which is quite similar to what we want, except that *we* are supplying
+        // the functions to be called for CRUD actions - they are not part of a Provider in the Ext sense
+        Ext.ux.SFDCProxy = Ext.extend(Ext.data.DirectProxy, {
+            constructor: function (config) {
+                config = config || {};
+                // override user-supplied config, if any, with our API definition
+                Ext.applyIf(config, {
+                    api: {
+                        read: Ext.apply(this.launchRead.createDelegate(this),
+                        // make read method look like a Provider
+                        {
+                            directCfg: {
+                                method: {
+                                    len: 1
+                                }
+                            }
+                        }),
+                        create: this.launchCreate.createDelegate(this),
+                        update: this.launchUpdate.createDelegate(this),
+                        destroy: this.launchDestroy.createDelegate(this)
+                    }
+                });
+                Ext.ux.SFDCProxy.superclass.constructor.call(this, config);
+            },
+            launchRead: function (params, callback, scope) {
+                // construct the query string.  We need to know the names of the selected fields.
+                // in normal proxies this information is held only by the reader.  Our custom store
+                // will supply these to us as a config parameter in the same format expected by readers
+                // get the names of the configured fields
+                var fieldlist = [];
+                for (var i = 0; i < this.fields.length; i++) {
+                    fieldlist.push(this.fields[i].name);
+                }
+        
+                // assemble the query string
+                var querystr = 'SELECT ' + fieldlist.join(', ') + ' from ' + this.sobjname;
+                // Implement server-side sorting
+                if ("sort" in params) {
+                    querystr += ' ORDER BY ' + params["sort"];
+                    if ("dir" in params) {
+                        querystr += ' ' + params["dir"];
+                    }
+                }
+                // I could theoretically use LIMIT here to reduce the amount of data transferred in cases
+                // where paging is in force.  Unfortunately this produces misleading results b/c we can't know
+                // the "total".  So I'm stuck with transferring extra data - but at least (due to the query
+                // locater paging mechanism) not *all* of it
+                // we have to create our own callback for the sforce request, for when it succeeds or fails, with
+                // the signature SF wants to see.  These callbacks must in turn call the Ext callback for
+                // data conversion (in the success case) or error reporting (fail)
+                // sforce signature is cb(queryResult, userarg) for success and cb(error, userarg) for failure
+                // Ext callback signature is cb(queryResult, statusobj), cb(error, statusobj) for failure
+                // So we will insert an extra status argument after the first one
+                sforce.connection.query(querystr,
+                // connect the ExtJS callbacks to the AJAX Toolkit callback system
+                // use createDelegate because it permits inserting args at arbitrary points
+                // but the scope fixing feature is not needed
+                {
+                    onSuccess: callback.createDelegate(window, [{
+                        status: true
+                    }], 1),
+                    onFailure: callback.createDelegate(window, [{
+                        status: false
+                    }], 1)
+                });
+            },
+            launchCreate: function (jsonData, callback, scope) {
+                // create and update are very similar, so consolidate
+                this.launchCreateOrUpdate('create', jsonData, callback, scope);
+            },
+            launchUpdate: function (jsonData, callback, scope) {
+                this.launchCreateOrUpdate('update', jsonData, callback, scope);
+            },
+            launchCreateOrUpdate: function (action, jsonData, callback, scope) {
+                var recs = jsonData.records; // named this way due to the "root" config option
+                // if writer is not "listful" we will sometimes get a single object here instead of a size 1 array
+                var sobjs = new Array();
+                for (var recno = 0; recno < recs.length; recno++) {
+                    var sobj = new sforce.SObject(this.sobjname);
+                    for (var k in recs[recno]) {
+                        sobj[k] = recs[recno][k];
+                    }
+                    sobjs.push(sobj);
+                }
+                sforce.connection[action](sobjs, {
+                    onSuccess: callback.createDelegate(window, [{
+                        status: true
+                    }], 1),
+                    onFailure: callback.createDelegate(window, [{
+                        status: false
+                    }], 1)
+                });
+            },
+            launchDestroy: function (jsonData, callback, scope) {
+                var recs = jsonData.records;
+                sforce.connection.deleteIds(recs, {
+                    onSuccess: callback.createDelegate(window, [{
+                        status: true
+                    }], 1),
+                    onFailure: callback.createDelegate(window, [{
+                        status: false
+                    }], 1)
+                });
+            },
+            onRead: function (action, trans, result, res) {
+                // Assemble result
+                var rT = trans.reader.recordType;
+                var records = [];
+                var it = new sforce.QueryResultIterator(result);
+                // only access results we absolutely have to, to avoid calling queryMore via the result iterator
+                var cur_rec = 0;
+                var recs_supplied = 0;
+                // if paging is in force, stop transferring data as soon as we have all that was requested
+                while (it.hasNext() && (!("limit" in trans.params) || (recs_supplied < trans.params["limit"]))) {
+                    var sobj = it.next();
+                    if (("start" in trans.params) && (cur_rec++ < trans.params["start"])) {
+                        // we have not come to the beginning of the requested data yet
+                        continue;
+                    }
+                    var r = {};
+                    var id;
+                    for (var k in sobj) {
+                        if (k == 'Id') {
+                            id = sobj[k];
+                        }
+                        r[k] = sobj[k];
+                    }
+                    records.push(new rT(r, id));
+                    recs_supplied++;
+                }
+                // indicate load complete with event, and supply records via callback
+                this.fireEvent("load", this, res, trans.request.arg);
+                trans.request.callback.call(trans.request.scope, {
+                    records: records,
+                    success: true,
+                    totalRecords: result.size
+                }, trans.request.arg, true);
+            },
+            onWrite: function (action, trans, result, res, rs) {
+                // Report results the way Ext wants to see them:
+                // produce an array of objects that just have IDs
+                // note it's possible to do a lot more error checking
+                // (esp comparing data we thought we uploaded with what actually happened)
+                // plus we have success/failure on a per-record level from sforce.
+                var data = [];
+                for (var i = 0; i < result.length; i++) {
+                    data.push({
+                        id: result[i].id
+                    });
+                }
+                this.fireEvent("write", this, action, data, res, rs, trans.request.arg);
+                trans.request.callback.call(trans.request.scope, data, res, true);
+            }
+        });
+        
+        // finally, the store class itself
+        // just sets things up right for the proxy (writer, pass sobj/fields to proxy)
+        Ext.ux.SFDCStore = Ext.extend(Ext.data.DirectStore, {
+            constructor: function (config) {
+                config = config || {};
+                var proxyCfg = Ext.copyTo({}, config, 'paramOrder,paramsAsHash,directFn,api,sobjname,fields');
+                Ext.applyIf(config, {
+                    proxy: new Ext.ux.SFDCProxy(proxyCfg),
+                    // "encode: false" keeps data in a nice format for our proxy onWrite
+                    writer: new Ext.data.JsonWriter({
+                        encode: false,
+                        listful: true
+                    }),
+                    root: 'records'
+                });
+                Ext.ux.SFDCStore.superclass.constructor.call(this, config);
+            }
+        });             
+    </script>
+        
+    <!-- End SFDCStore component definition;  begin code for grid page -->
+    <!-- Icons.  Using those included with ExtJS. -->
+    <style type="text/css">
+        .icon-add
+        {
+            background:url({!$Resource.ExtJS}/examples/shared/icons/fam/add.gif) 0 no-repeat !important
+        }
+        .icon-save
+        {
+            background:url({!$Resource.ExtJS}/examples/shared/icons/save.gif) 0 no-repeat !important
+        }
+        .icon-delete
+        {
+            background:url({!$Resource.ExtJS}/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
+        }
+    </style>
+
+    <script type="text/javascript">
+        Ext.onReady(function () {
+            // check version - we require 3.2.1 or later
+            var required_version = [3, 2, 1];
+            var vercomps = Ext.version.split('.');
+            if ((vercomps[2] < required_version[2]) || (vercomps[2] == required_version[2]) && ((vercomps[1] < required_version[1]) || (vercomps[1] == required_version[1]) && (vercomps[0] < required_version[0]))) {
+                Ext.Msg.alert('This code has only been tested with Ext version', required_version.join('.'));
+            }
+            // use AJAX Toolkit calls to verify that the supplied attributes make sense
+            var describeResult;
+            try {
+                describeResult = sforce.connection.describeSObjects(["{!object}"]);
+            } catch (err) {
+                Ext.Msg.alert('describe call failed on sobject {!object}:', err);
+                return;
+            }
+            // locate our fields within the list of fields and copy properties
+            var fieldtypes = [],
+                fieldlabels = [],
+                allowblank = [],
+                modifiable = [],
+                sortable = [];
+            var fields = "{!fields}";
+            var fieldlist = fields.split(',');
+            var objfields = describeResult[0].fields;
+            for (var i = 0; i < fieldlist.length; i++) {
+                // locate this requested field within the describe result
+                var field_idx = -1;
+                for (var j = 0; j < objfields.length; j++) {
+                    if (fieldlist[i] == objfields[j].name) {
+                        field_idx = j;
+                    }
+                }
+                if (field_idx == -1) {
+                    Ext.Msg.alert('{!object} does not have a field called', fieldlist[i]);
+                    return;
+                }
+                // extra information will help us do a better job with each field
+                var objfield = objfields[field_idx];
+                fieldtypes.push(objfield.type);
+                fieldlabels.push(objfield.label);
+                allowblank.push(objfield.nillable);
+                // let users modify if they can create or update AND it's not the Id field
+                // unwelcome discovery: a boolean stored in an Array becomes a string, and therefore "true"
+                // have to do string compares later :(
+                modifiable.push(objfield.createable || objfield.updateable);
+                sortable.push(objfield.sortable);
+                // TBD implement picklist editor by creating an ArrayStore to supply values
+            }
+            // create the Store
+            var extfields = [];
+            if (fieldlist.indexOf('Id') == -1) {
+                extfields.push({
+                    name: 'Id'
+                }); // always include ID in the store
+            }
+            for (var i = 0; i < fieldlist.length; i++) {
+                extfields.push({
+                    name: fieldlist[i]
+                });
+            }
+            var store = new Ext.ux.SFDCStore({
+                sobjname: '{!object}',
+                fields: extfields,
+                remoteSort: true,
+                autoSave: false,
+                batch: true
+            });
+        
+            // and now the Grid that references it - columns first
+            var columns = [];
+            for (var i = 0; i < fieldlist.length; i++) {
+                var col = {
+                    id: fieldlist[i],
+                    dataIndex: fieldlist[i],
+                    header: fieldlabels[i],
+                    sortable: sortable[i],
+                    width: 150
+                };
+                // use data type from above to determine type of Editor and xtype to use
+                if ((fieldtypes[i] == "int") || (fieldtypes[i] == "double")) {
+                    col.xtype = 'numbercolumn';
+                    if (fieldtypes[i] == "int") {
+                        // do not show decimals
+                        col.format = '0,000';
+                    }
+                    if (modifiable[i] == "true") {
+                        col.editor = new Ext.form.NumberField({
+                            allowBlank: allowblank[i],
+                            allowDecimals: (fieldtypes[i] == "double")
+                        });
+                    }
+                } else if (fieldtypes[i] == "boolean") {
+                    col.xtype = 'booleancolumn';
+                    if (modifiable[i] == "true") {
+                        col.editor = new Ext.form.Checkbox();
+                    }
+                } else if (fieldtypes[i] == "date") {
+                    col.xtype = 'datecolumn';
+                    if (modifiable[i] == "true") {
+                        // NOTE not fully tested.  I observed some type of time zone issue where
+                        // value stored on server was 1 day off from the one chosen
+                        col.editor = new Ext.form.DateField({
+                            allowBlank: allowblank[i]
+                        });
+                    }
+                } else {
+                    // default xtype is OK
+                    if (modifiable[i] == "true") {
+                        // fall back on TextField, but use validators if possible
+                        var cfg = {
+                            allowBlank: allowblank[i]
+                        };
+                        if ((fieldtypes[i] == "url") || (fieldtypes[i] == "email")) {
+                            cfg.vtype = fieldtypes[i];
+                        }
+                        col.editor = new Ext.form.TextField(cfg);
+                    }
+                }
+                columns.push(col);
+            }
+            var pagesize = parseInt('{!rows}'); // otherwise we end up with a string value, which subtly fails
+            var initially_minimized = '{!minimized}';
+            if (initially_minimized !== 'true') {
+                store.load({
+                    params: {
+                        start: 0,
+                        limit: pagesize
+                    }
+                });
+            }
+            var grid = new Ext.grid.EditorGridPanel({
+                store: store,
+                columns: columns,
+                stripeRows: true,
+                height: 500,
+                title: '{!object}',
+                collapsible: true,
+                collapsed: (initially_minimized == "true"),
+                listeners: {
+                    beforeexpand: function (panel, animate) { // load data via query when grid expanded by user
+                        var store = panel.getStore(); // a reference to the original store we configured the panel with
+                        if (store.getTotalCount() == 0) {
+                            store.load({
+                                params: {
+                                    start: 0,
+                                    limit: pagesize
+                                }
+                            });
+                        }
+                        return true;
+                    }
+                },
+                bbar: new Ext.PagingToolbar({
+                    pageSize: pagesize,
+                    store: store,
+                    displayInfo: true,
+                    displayMsg: 'Displaying objects {0} - {1} of {2}',
+                    emptyMsg: 'no records found'
+                }),
+                sm: new Ext.grid.RowSelectionModel(),
+                tbar: {
+                    items: [{
+                        text: 'Save Changes',
+                        iconCls: 'icon-save',
+                        handler: function () {
+                            Ext.Msg.confirm('Save Changes?', 'Commit all changes, including deletions, in {!object}?', function (b) {
+                                if (b == 'yes') {
+                                    grid.stopEditing();
+                                    store.save();
+                                }
+                            });
+                        }
+                    },
+                    {
+                        text: 'New',
+                        iconCls: 'icon-add',
+                        handler: function () {
+                            grid.stopEditing();
+                            var newreccfg = {};
+                            for (var i = 0; i < fieldlist.length; i++) {
+                                newreccfg[fieldlist[i]] = '';
+                            }
+                            store.insert(0, new store.recordType(newreccfg));
+                            grid.startEditing(0, 1);
+                        }
+                    },
+                    {
+                        text: 'Delete Selected',
+                        iconCls: 'icon-delete',
+                        handler: function (b, e) { // button handlers get the button and the event passed in
+                            // collect list of things that will be deleted
+                            var mygrid = b.findParentByType('editorgrid');
+                            var selRecs = mygrid.getSelectionModel().getSelections();
+                            if (selRecs.length == 0) {
+                                console.log('no records selected');
+                                return;
+                            }
+                            var delIds = new Array();
+                            for (var i = 0; i < selRecs.length; i++) {
+                                delIds.push(selRecs[i].id);
+                            }
+                            Ext.Msg.confirm('Delete Entries?', 'Temporarily delete entries ' + delIds.join(', ') + '?', function (b) {
+                                if (b == 'yes') {
+                                    grid.stopEditing();
+                                    store.remove(selRecs);
+                                }
+                            });
+                        }
+                    }]
+                },
+                batchSave: true,
+                renderTo: 'myGrid' // I think this is keeping me from having >1 grid per page. how to fix?
+            });
+        });
+    </script>
+    <div id="myGrid"/>
+</apex:component>
