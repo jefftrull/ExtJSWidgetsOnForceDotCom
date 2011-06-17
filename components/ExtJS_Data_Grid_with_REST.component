@@ -1,0 +1,281 @@
+<apex:component >
+    <!-- A Visualforce component implementing an ExtJS editable grid backed by a store wrapping an SObject -->
+    <!-- Implemented this time using the REST API -->
+    <!-- Jeff Trull 4/12/2011 -->
+    <apex:attribute name="object" type="Object" description="sObject to generate a grid for" required="true"/>
+    <apex:attribute name="fields" type="String[]" description="list of fields to display" required="true"/>
+    <apex:attribute name="minimized" type="Boolean" description="whether to initially render the grid in minimized state" default="false"/>
+    <apex:attribute name="rows" type="int" description="how many rows to display in grid" default="19"/>
+
+    <!-- load ExtJS -->
+    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.3.1/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/adapter/ext/ext-base-debug.js"/>
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/ext-all-debug.js"/>       
+    <script type="text/javascript">
+        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.3.1/resources/images/default/s.gif"
+    </script>
+
+    <!-- End SFDCStore component definition;  begin code for grid page -->
+    <!-- Icons.  Using those included with ExtJS. -->
+    <style type="text/css">
+        .icon-add
+        {
+            background:url({!$Resource.ExtJS}/ext-3.3.1/examples/shared/icons/fam/add.gif) 0 no-repeat !important
+        }
+        .icon-save
+        {
+            background:url({!$Resource.ExtJS}/ext-3.3.1/examples/shared/icons/save.gif) 0 no-repeat !important
+        }
+        .icon-delete
+        {
+            background:url({!$Resource.ExtJS}/ext-3.3.1/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
+        }
+    </style>
+
+    <script type="text/javascript">
+        Ext.onReady(function () {
+            // use REST calls to verify that the supplied attributes make sense
+            Ext.Ajax.request({
+            	url: "https://" + location.hostname + "/services/proxy",
+            	headers: {
+            		'Authorization' : 'OAuth {!GETSESSIONID()}',
+               		'Accept' : 'application/json',
+               		'SalesforceProxy-Endpoint' : '{!URLFOR('/services')}/data/v20.0/sobjects/{!object}/describe/'
+               	},
+               	failure: function(response, opts) {
+               		Ext.Msg.alert('describe call on object {!object} failed with status ' + response.status);
+               	},
+               	success: function(response, opts) {
+               		// parse field type info out of the response    
+		            // locate our fields within the list of fields and copy properties
+		            var fieldtypes = [],
+		                fieldlabels = [],
+		                allowblank = [],
+		                modifiable = [],
+		                sortable = [];
+		            var fields = "{!fields}";
+		            var fieldlist = fields.split(',');
+		            var respobj = Ext.util.JSON.decode(response.responseText);
+		            var objfields = respobj.fields;
+		            for (var i = 0; i < fieldlist.length; i++) {
+		                // locate this requested field within the describe result
+		                var field_idx = -1;
+		                for (var j = 0; j < objfields.length; j++) {
+		                    if (fieldlist[i] == objfields[j].name) {
+		                        field_idx = j;
+		                    }
+		                }
+		                if (field_idx == -1) {
+		                    Ext.Msg.alert('{!object} does not have a field called', fieldlist[i]);
+		                    return;
+		                }
+		                // extra information will help us do a better job with each field
+		                var objfield = objfields[field_idx];
+		                fieldtypes.push(objfield.type);
+		                fieldlabels.push(objfield.label);
+		                allowblank.push(objfield.nillable);
+		                // let users modify if they can create or update AND it's not the Id field
+		                // unwelcome discovery: a boolean stored in an Array becomes a string, and therefore "true"
+		                // have to do string compares later :(
+		                modifiable.push(objfield.createable || objfield.updateable);
+		                sortable.push(objfield.sortable);
+		                // TBD implement picklist editor by creating an ArrayStore to supply values
+		            }
+		            // create the Store
+		            var extfields = [];
+		            if (fieldlist.indexOf('Id') == -1) {
+		                extfields.push({
+		                    name: 'Id'
+		                }); // always include ID in the store
+		            }
+		            for (var i = 0; i < fieldlist.length; i++) {
+		                extfields.push({
+		                    name: fieldlist[i]
+		                });
+		            }
+		            var store = new Ext.data.JsonStore({
+            			url: "https://" + location.hostname + "/services/proxy",
+		                fields: extfields,
+		                totalProperty: 'totalSize',
+		                root: 'records',
+		                idProperty: 'Id',
+   		                remoteSort: true,
+		                autoSave: false,
+		                batch: true
+		            });
+		            // add session ID to headers
+		            store.proxy.getConnection().defaultHeaders = {
+		               	'Authorization' : 'OAuth {!GETSESSIONID()}',
+		               	'Accept' : 'application/json',
+		                'X-PrettyPrint' : '1'
+		            };
+		            store.proxy.getConnection().disableCaching = false;  // cache buster param confuses REST
+		            store.on({
+		            	beforeload: {
+		            		fn: function(store, options) {
+		            			// construct query string
+		            			var querystr = 'select+' + fieldlist.join(',') + '+from+{!object}';
+								// must handle start/limit with postprocessing, because even if we supply "limit" here,
+								// the resulting total count (supplied to the store in the result) would be wrong.
+								// in this the REST API is a mismatch to what we need - serverside paging
+								// what we have to do is intercept the response, and 1) supply only the data requested
+								// in start/limit 2) if some requested data is outside the supplied range, submit
+								// more requests until we have all the requested data
+								Ext.apply(store.proxy.getConnection().defaultHeaders,
+									{'SalesforceProxy-Endpoint' : '{!URLFOR('/services')}/data/v20.0/query/?q=' + querystr});
+								store.proxy.getConnection().method = 'GET';
+		            		 }
+		            	}
+		            });
+		        
+		            // and now the Grid that references it - columns first
+		            var columns = [];
+		            for (var i = 0; i < fieldlist.length; i++) {
+		                var col = {
+		                    id: fieldlist[i],
+		                    dataIndex: fieldlist[i],
+		                    header: fieldlabels[i],
+		                    sortable: sortable[i],
+		                    width: 150
+		                };
+		                // use data type from above to determine type of Editor and xtype to use
+		                if ((fieldtypes[i] == "int") || (fieldtypes[i] == "double")) {
+		                    col.xtype = 'numbercolumn';
+		                    if (fieldtypes[i] == "int") {
+		                        // do not show decimals
+		                        col.format = '0,000';
+		                    }
+		                    if (modifiable[i] == "true") {
+		                        col.editor = new Ext.form.NumberField({
+		                            allowBlank: allowblank[i],
+		                            allowDecimals: (fieldtypes[i] == "double")
+		                        });
+		                    }
+		                } else if (fieldtypes[i] == "boolean") {
+		                    col.xtype = 'booleancolumn';
+		                    if (modifiable[i] == "true") {
+		                        col.editor = new Ext.form.Checkbox();
+		                    }
+		                } else if (fieldtypes[i] == "date") {
+		                    col.xtype = 'datecolumn';
+		                    if (modifiable[i] == "true") {
+		                        // NOTE not fully tested.  I observed some type of time zone issue where
+		                        // value stored on server was 1 day off from the one chosen
+		                        col.editor = new Ext.form.DateField({
+		                            allowBlank: allowblank[i]
+		                        });
+		                    }
+		                } else {
+		                    // default xtype is OK
+		                    if (modifiable[i] == "true") {
+		                        // fall back on TextField, but use validators if possible
+		                        var cfg = {
+		                            allowBlank: allowblank[i]
+		                        };
+		                        if ((fieldtypes[i] == "url") || (fieldtypes[i] == "email")) {
+		                            cfg.vtype = fieldtypes[i];
+		                        }
+		                        col.editor = new Ext.form.TextField(cfg);
+		                    }
+		                }
+		                columns.push(col);
+		            }
+		            var pagesize = parseInt('{!rows}'); // otherwise we end up with a string value, which subtly fails
+		            var initially_minimized = '{!minimized}';
+		            if (initially_minimized !== 'true') {
+		                store.load({
+		                    params: {
+		                        start: 0,
+		                        limit: pagesize
+		                    }
+		                });
+		            }
+		            var grid = new Ext.grid.EditorGridPanel({
+		                store: store,
+		                columns: columns,
+		                stripeRows: true,
+		                height: 500,
+		                title: '{!object}',
+		                collapsible: true,
+		                collapsed: (initially_minimized == "true"),
+		                listeners: {
+		                    beforeexpand: function (panel, animate) { // load data via query when grid expanded by user
+		                        var store = panel.getStore(); // a reference to the original store we configured the panel with
+		                        if (store.getTotalCount() == 0) {
+		                            store.load({
+		                                params: {
+		                                    start: 0,
+		                                    limit: pagesize
+		                                }
+		                            });
+		                        }
+		                        return true;
+		                    }
+		                },
+		                bbar: new Ext.PagingToolbar({
+		                    pageSize: pagesize,
+		                    store: store,
+		                    displayInfo: true,
+		                    displayMsg: 'Displaying objects {0} - {1} of {2}',
+		                    emptyMsg: 'no records found'
+		                }),
+		                sm: new Ext.grid.RowSelectionModel(),
+		                tbar: {
+		                    items: [{
+		                        text: 'Save Changes',
+		                        iconCls: 'icon-save',
+		                        handler: function () {
+		                            Ext.Msg.confirm('Save Changes?', 'Commit all changes, including deletions, in {!object}?', function (b) {
+		                                if (b == 'yes') {
+		                                    grid.stopEditing();
+		                                    store.save();
+		                                }
+		                            });
+		                        }
+		                    },
+		                    {
+		                        text: 'New',
+		                        iconCls: 'icon-add',
+		                        handler: function () {
+		                            grid.stopEditing();
+		                            var newreccfg = {};
+		                            for (var i = 0; i < fieldlist.length; i++) {
+		                                newreccfg[fieldlist[i]] = '';
+		                            }
+		                            store.insert(0, new store.recordType(newreccfg));
+		                            grid.startEditing(0, 1);
+		                        }
+		                    },
+		                    {
+		                        text: 'Delete Selected',
+		                        iconCls: 'icon-delete',
+		                        handler: function (b, e) { // button handlers get the button and the event passed in
+		                            // collect list of things that will be deleted
+		                            var mygrid = b.findParentByType('editorgrid');
+		                            var selRecs = mygrid.getSelectionModel().getSelections();
+		                            if (selRecs.length == 0) {
+		                                console.log('no records selected');
+		                                return;
+		                            }
+		                            var delIds = new Array();
+		                            for (var i = 0; i < selRecs.length; i++) {
+		                                delIds.push(selRecs[i].id);
+		                            }
+		                            Ext.Msg.confirm('Delete Entries?', 'Temporarily delete entries ' + delIds.join(', ') + '?', function (b) {
+		                                if (b == 'yes') {
+		                                    grid.stopEditing();
+		                                    store.remove(selRecs);
+		                                }
+		                            });
+		                        }
+		                    }]
+		                },
+		                batchSave: true,
+		                renderTo: 'myGrid' // I think this is keeping me from having >1 grid per page. how to fix?
+		            });
+		        }
+		    });		    
+        });
+    </script>
+    <div id="myGrid"/>
+</apex:component>
