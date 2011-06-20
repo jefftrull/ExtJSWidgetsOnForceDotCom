@@ -489,6 +489,8 @@
 		                                if (b == 'yes') {
 		                                    grid.stopEditing();
 		                                    store.save();
+											// reload data for current page
+											grid.getBottomToolbar().doRefresh();
 		                                }
 		                            });
 		                        }
