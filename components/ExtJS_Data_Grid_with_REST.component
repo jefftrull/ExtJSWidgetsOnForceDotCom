@@ -8,8 +8,8 @@
 
     <!-- load ExtJS -->
     <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.3.1/resources/css/ext-all.css" />
-    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/adapter/ext/ext-base-debug.js"/>
-    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/ext-all-debug.js"/>       
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/adapter/ext/ext-base.js"/>
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/ext-all.js"/>       
     <script type="text/javascript">
         Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.3.1/resources/images/default/s.gif"
     </script>
@@ -31,8 +31,6 @@
       	var totalcnt;              // total number of available records as determined by the server
       	var start, limit;		   // currently requested page
         function processQuery(url, callback) {
-        	console.log('processQuery called with url=', url, ' start=', start, ' limit=', limit);
-        	console.log('results array has size=', results.length);
         	// look at the requested data range and see if we have it cached
         	if (start == undefined) {
         		start = 0;
@@ -40,7 +38,6 @@
         	if ((url == undefined) ||                  // means no more data to fetch from server
         		(limit !== undefined) &&               // otherwise means "fetch all data"
         		((results.length - start) >= limit)) { // we have the range in the cache
-        		console.log('supplying data directly from indices ', start, ' to ', start+limit);
         		// construct result and execute callback.  Make it look like it came from server
         		callback.call(window,
         					  {responseText: Ext.util.JSON.encode(
@@ -60,7 +57,6 @@
 	             // the signature Ext.Ajax.request wants to see.  These callbacks must in turn call the Ext callback for
 	             // data conversion (in the success case) or error reporting (fail)
 				 success: function(response, opts) {
-				 	console.log('Ajax request succeeded with response=', response, ' and opts=', opts);
 				 	var respobj = Ext.util.JSON.decode(response.responseText);
 				 	totalcnt = respobj.totalSize;
 				 	if (!respobj.done) {
