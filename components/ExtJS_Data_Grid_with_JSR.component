@@ -22,26 +22,26 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
     <apex:attribute name="rows" type="int" description="how many rows to display in grid" default="19"/>
 
     <!-- load ExtJS -->
-    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.3.1/resources/css/ext-all.css" />
-    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/adapter/ext/ext-base.js"/>
-    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/ext-all.js"/>       
+    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.4.0/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/adapter/ext/ext-base.js"/>
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/ext-all.js"/>       
     <script type="text/javascript">
-        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.3.1/resources/images/default/s.gif"
+        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.4.0/resources/images/default/s.gif"
     </script>
 
     <!-- Icons.  Using those included with ExtJS. -->
     <style type="text/css">
         .icon-add
         {
-            background:url({!$Resource.ExtJS}/ext-3.3.1/examples/shared/icons/fam/add.gif) 0 no-repeat !important
+            background:url({!$Resource.ExtJS}/ext-3.4.0/examples/shared/icons/fam/add.gif) 0 no-repeat !important
         }
         .icon-save
         {
-            background:url({!$Resource.ExtJS}/ext-3.3.1/examples/shared/icons/save.gif) 0 no-repeat !important
+            background:url({!$Resource.ExtJS}/ext-3.4.0/examples/shared/icons/save.gif) 0 no-repeat !important
         }
         .icon-delete
         {
-            background:url({!$Resource.ExtJS}/ext-3.3.1/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
+            background:url({!$Resource.ExtJS}/ext-3.4.0/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
         }
     </style>
 
