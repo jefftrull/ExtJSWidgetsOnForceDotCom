@@ -24,7 +24,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
     <script type="text/javascript">
     var __sfdcSessionId = '{!GETSESSIONID()}';
     </script>
-    <script src="../../soap/ajax/20.0/connection.js" type="text/javascript"></script>
+    <script src="../../soap/ajax/22.0/connection.js" type="text/javascript"></script>
 
     <!-- load ExtJS -->
     <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.4.0/resources/css/ext-all.css" />
@@ -238,12 +238,6 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 
     <script type="text/javascript">
         Ext.onReady(function () {
-            // check version - we require 3.2.1 or later
-            var required_version = [3, 2, 1];
-            var vercomps = Ext.version.split('.');
-            if ((vercomps[2] < required_version[2]) || (vercomps[2] == required_version[2]) && ((vercomps[1] < required_version[1]) || (vercomps[1] == required_version[1]) && (vercomps[0] < required_version[0]))) {
-                Ext.Msg.alert('This code has only been tested with Ext version', required_version.join('.'));
-            }
             // use AJAX Toolkit calls to verify that the supplied attributes make sense
             var describeResult;
             try {
