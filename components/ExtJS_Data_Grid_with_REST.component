@@ -202,13 +202,8 @@
                 // Assemble result
                 var rT = trans.reader.recordType;
                 var records = [];
-                // BOZO we need to make our own sort of "iterator" based on asynch callbacks that gradually
-                // forms the desired result using start/limit params from the grid and parsing JSON
-                // for now, let's just turn the result into an array of records, understanding that
-                // this will break if we have to make another request
-                // var it = new sforce.QueryResultIterator(result);
                 var respobj = Ext.util.JSON.decode(result.responseText);
-                // only access results we absolutely have to, to avoid calling queryMore via the result iterator
+                // only access results we absolutely have to, to avoid using the nextRecordsUrl
                 var cur_rec = 0;
                 var recs_supplied = 0;
                 // if paging is in force, stop transferring data as soon as we have all that was requested
