@@ -37,6 +37,9 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                			'Accept' : 'application/json'
                			};
         // redirect all accesses through the (SFDC) proxy
+        // This approach to working around the same-origin policy (VF servers have no REST endpoint) is due to
+        // Pat Patterson; for more information about his jQuery-based implementation see:
+        // http://blog.sforce.com/sforce/2011/03/calling-the-rest-api-from-javascript-in-visualforce-pages.html
         Ext.Ajax.url = "https://" + location.hostname + "/services/proxy";
         
         // code to launch a query, fetching additional results as necessary to supply request
