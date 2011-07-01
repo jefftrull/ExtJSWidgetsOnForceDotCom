@@ -1,0 +1,250 @@
+<apex:component controller="ExtJSStoreRemotingCtrl">
+    <!-- A Visualforce component implementing an ExtJS grid backed by JS Remoting from a controller -->
+    <!-- Jeff Trull 6/20/2011 -->
+    <apex:attribute name="object" type="String" description="sObject to generate a grid for" required="true"/>
+    <apex:attribute name="fields" type="String[]" description="list of fields to display" required="true"/>
+    <apex:attribute name="minimized" type="Boolean" description="whether to initially render the grid in minimized state" default="false"/>
+    <apex:attribute name="rows" type="int" description="how many rows to display in grid" default="19"/>
+
+    <!-- load ExtJS -->
+    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.3.1/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/adapter/ext/ext-base.js"/>
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.3.1/ext-all.js"/>       
+    <script type="text/javascript">
+        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.3.1/resources/images/default/s.gif"
+    </script>
+
+    <!-- Icons.  Using those included with ExtJS. -->
+    <style type="text/css">
+        .icon-add
+        {
+            background:url({!$Resource.ExtJS}/ext-3.3.1/examples/shared/icons/fam/add.gif) 0 no-repeat !important
+        }
+        .icon-save
+        {
+            background:url({!$Resource.ExtJS}/ext-3.3.1/examples/shared/icons/save.gif) 0 no-repeat !important
+        }
+        .icon-delete
+        {
+            background:url({!$Resource.ExtJS}/ext-3.3.1/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
+        }
+    </style>
+
+    <script type="text/javascript">
+        Ext.onReady(function () {
+        	// create a DirectProxy object to interact with our controller
+        	var proxy = new Ext.data.DirectProxy({
+        						api: {read:     ExtJSStoreRemotingCtrl.query,
+        							  create:   ExtJSStoreRemotingCtrl.create,
+        							  update:   ExtJSStoreRemotingCtrl.updat,
+        							  destroy:  ExtJSStoreRemotingCtrl.delet
+        							  }
+        						});
+
+        	// use JS Remoting to get field metadata info
+        	ExtJSStoreRemotingCtrl.describeFields('{!object}', String('{!fields}').toLowerCase(),
+        		function(fieldData, e) {
+        			if (!e.status) {
+        				Ext.Msg.alert('Server error', e.message);
+        				return;
+        			}
+        			// use field metadata to define column types and properties
+					var columns = [];
+		            for (var i = 0; i < fieldData.length; i++) {
+		                var col = {
+		                    id: fieldData[i].name,
+		                    dataIndex: fieldData[i].name,
+		                    header: fieldData[i].label,
+		                    sortable: fieldData[i].sortable,
+		                    width: 150
+		                };
+		                // use data type from above to determine type of Editor and xtype to use
+		                if ((fieldData[i].fieldType == "int") || (fieldData[i].fieldType == "double")) {
+		                    col.xtype = 'numbercolumn';
+		                    if (fieldData[i].fieldType == "int") {
+		                        // do not show decimals
+		                        col.format = '0,000';
+		                    }
+		                    if (fieldData[i].modifiable) {
+		                        col.editor = new Ext.form.NumberField({
+		                            allowBlank: fieldData[i].nillable,
+		                            allowDecimals: (fieldData[i].fieldType == "double")
+		                        });
+		                    }
+		                } else if (fieldData[i].fieldType == "boolean") {
+		                    col.xtype = 'booleancolumn';
+		                    if (fieldData[i].modifiable) {
+		                        col.editor = new Ext.form.Checkbox();
+		                    }
+		                } else if (fieldData[i].fieldType == "date") {
+		                    col.xtype = 'datecolumn';
+		                    if (fieldData[i].modifiable) {
+		                        // NOTE not fully tested.  I observed some type of time zone issue where
+		                        // value stored on server was 1 day off from the one chosen
+		                        col.editor = new Ext.form.DateField({
+		                            allowBlank: fieldData[i].nillable
+		                        });
+		                    }
+		                } else if (fieldData[i].modifiable && (fieldData[i].fieldType == "picklist")) {
+		                	// modifiable picklists will use a ComboBox but otherwise we'll use text (default)
+		                	col.editor = {xtype: 		 'combo',
+		                				  triggerAction: 'all',   // not sure what this does!
+		                				  displayField:  'display',
+		                				  valueField:	 'value',
+		                				  mode:          'local',
+		                				  store:		 new Ext.data.ArrayStore({
+		                				  				 	fields: ['display', 'value'],
+		                				  				 	data: fieldData[i].picklistValues
+		                				  				 })
+		                				 };
+		                } else {
+		                    // default xtype is OK
+		                    if (fieldData[i].modifiable) {
+		                        // fall back on TextField, but use validators if possible
+		                        var cfg = {
+		                            allowBlank: fieldData[i].nillable
+		                        };
+		                        if ((fieldData[i].fieldType == "url") || (fieldData[i].fieldType == "email")) {
+		                            cfg.vtype = fieldData[i].fieldType;
+		                        }
+		                        col.editor = new Ext.form.TextField(cfg);
+		                    }
+		                }
+		                columns.push(col);
+		            }
+
+		         	// use the field list to define the Store
+		        	var extfields = [];
+		        	var fieldlist = String('{!fields}').toLowerCase().split(',');
+		            if (fieldlist.indexOf('id') == -1) {
+		                extfields.push({
+		                    name: 'id'
+		                }); // always include ID in the store
+		            }
+		            for (var i = 0; i < fieldData.length; i++) {
+		            	var field = {name: fieldData[i].name};
+		            	if (fieldData[i].fieldType == "date") {
+		            		// having trouble with dates for some reason.  Need to manually specify here.
+		            		field.type = "date";
+		            		field.dateFormat = "Y-m-d H:i:s";    // as supplied by String.valueOf on the server
+		            	}
+		            	extfields.push(field);
+		            }
+		           var store = new Ext.data.JsonStore({
+		           		baseParams: {sobjname: '{!object}',    // will be sent along with start, limit, etc.
+		           					 fields: String('{!fields}').toLowerCase()},
+		           		root: 'records',   // top-level response property containing the list of records
+		           		messageProperty: 'errorMessage',  // response property containing user feedback, if success=false
+						idProperty: 'id',
+		           		proxy: proxy,
+		           		writer: new Ext.data.JsonWriter({
+		                	encode:  false,   // docs say "set this to false when using DirectProxy"
+		                	listful: true     // we can code it this way in the controller = more efficient
+		            	}),
+		                fields: extfields,
+		                remoteSort: true,
+		                autoSave: false,
+		                batch: true
+		            });
+        	
+		            // create grid using the column definitions
+		            var pagesize = parseInt('{!rows}'); // otherwise we end up with a string value, which subtly fails
+		            var initially_minimized = '{!minimized}';
+		            if (initially_minimized !== 'true') {
+		                store.load({
+		                    params: {
+		                        start: 0,
+		                        limit: pagesize
+		                    }
+		                });
+		            }
+		            var grid = new Ext.grid.EditorGridPanel({
+		                store: store,
+		                columns: columns,
+		                stripeRows: true,
+		                height: 500,
+		                title: '{!object}',
+		                collapsible: true,
+		                collapsed: (initially_minimized == "true"),
+		                listeners: {
+		                    beforeexpand: function (panel, animate) { // load data via query when grid expanded by user
+		                        var store = panel.getStore(); // a reference to the original store we configured the panel with
+		                        if (store.getTotalCount() == 0) {
+		                            store.load({
+		                                params: {
+		                                    start: 0,
+		                                    limit: pagesize
+		                                }
+		                            });
+		                        }
+		                        return true;
+		                    }
+		                },
+		                bbar: new Ext.PagingToolbar({
+		                    pageSize: pagesize,
+		                    store: store,
+		                    displayInfo: true,
+		                    displayMsg: 'Displaying objects {0} - {1} of {2}',
+		                    emptyMsg: 'no records found'
+		                }),
+		                sm: new Ext.grid.RowSelectionModel(),
+		                tbar: {
+		                    items: [{
+		                        text: 'Save Changes',
+		                        iconCls: 'icon-save',
+		                        handler: function () {
+		                            Ext.Msg.confirm('Save Changes?', 'Commit all changes, including deletions, in {!object}?', function (b) {
+		                                if (b == 'yes') {
+		                                    grid.stopEditing();
+		                                    store.save();
+											// reload data for current page.  Only necessary for inserts/deletes actually...
+											grid.getBottomToolbar().doRefresh();
+		                                }
+		                            });
+		                        }
+		                    },
+		                    {
+		                        text: 'New',
+		                        iconCls: 'icon-add',
+		                        handler: function () {
+		                            grid.stopEditing();
+		                            var newreccfg = {};
+		                            for (var i = 0; i < fieldlist.length; i++) {
+		                                newreccfg[fieldlist[i]] = '';
+		                            }
+		                            store.insert(0, new store.recordType(newreccfg));
+		                            grid.startEditing(0, 1);
+		                        }
+		                    },
+		                    {
+		                        text: 'Delete Selected',
+		                        iconCls: 'icon-delete',
+		                        handler: function (b, e) { // button handlers get the button and the event passed in
+		                            // collect list of things that will be deleted
+		                            var mygrid = b.findParentByType('editorgrid');
+		                            var selRecs = mygrid.getSelectionModel().getSelections();
+		                            if (selRecs.length == 0) {
+		                                console.log('no records selected');
+		                                return;
+		                            }
+		                            var delIds = new Array();
+		                            for (var i = 0; i < selRecs.length; i++) {
+		                                delIds.push(selRecs[i].id);
+		                            }
+		                            Ext.Msg.confirm('Delete Entries?', 'Temporarily delete entries ' + delIds.join(', ') + '?', function (b) {
+		                                if (b == 'yes') {
+		                                    grid.stopEditing();
+		                                    store.remove(selRecs);
+		                                }
+		                            });
+		                        }
+		                    }]
+		                },
+		                batchSave: true,
+		                renderTo: 'myGrid'
+		            });  // end of grid definition
+		        }); // end of describeFields
+		    }); // end of onReady
+    </script>
+    <div id="myGrid"/>
+</apex:component>
