@@ -391,6 +391,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                 store: store,
                 columns: columns,
                 stripeRows: true,
+		        loadMask: true,
                 height: 500,
                 title: '{!object}',
                 collapsible: true,
