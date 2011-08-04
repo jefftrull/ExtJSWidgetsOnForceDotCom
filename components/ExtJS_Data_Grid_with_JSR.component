@@ -161,7 +161,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 		                autoSave: false,
 		                batch: true
 		            });
-        	
+
 		            // create grid using the column definitions
 		            var pagesize = parseInt('{!rows}'); // otherwise we end up with a string value, which subtly fails
 		            var initially_minimized = '{!minimized}';
@@ -213,8 +213,6 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 		                                if (b == 'yes') {
 		                                    grid.stopEditing();
 		                                    store.save();
-											// reload data for current page.  Only necessary for inserts/deletes actually...
-											grid.getBottomToolbar().doRefresh();
 		                                }
 		                            });
 		                        }
@@ -259,6 +257,28 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 		                batchSave: true,
 		                renderTo: 'myGrid'
 		            });  // end of grid definition
+
+					// error handling for grid
+		            store.on('exception',
+		            	function( proxy, type, action, options, response, arg ){
+		            		// first, check to see if the exception is due to a communication error of some sort
+		            		// (HTTP response codes 404/500 or Ext cannot parse the response) - type "response" OR
+		            		// communication was successful but the server had a problem with the transaction - type "remote"
+		            		if (type == 'response') {
+		            			Ext.Msg.alert('Error', 'communication failure');
+		            		} else {
+		            			Ext.Msg.alert('Error', response.errorMessage);
+		            		}
+		            		console.log('exception with type', type, 'action', action, 'options', options, 'response', response, 'arg', arg);
+						},this);
+		            
+ 					// for successful transactions, must reload grid to reflect updated data (esp since remote sorting)
+        			store.on('write',
+        				function(store, action, result, res, rs) {
+        					console.log('write event handler called with store', store, 'action', action, 'result', result, 'res', res, 'rs', rs);
+        					grid.getBottomToolbar().doRefresh();
+        				}, this);
+
 		        }); // end of describeFields
 		    }); // end of onReady
     </script>
