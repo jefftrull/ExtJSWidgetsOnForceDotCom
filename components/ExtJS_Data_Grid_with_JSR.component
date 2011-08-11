@@ -74,9 +74,9 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 		                    width: 150
 		                };
 		                // use data type from above to determine type of Editor and xtype to use
-		                if ((fieldData[i].fieldType == "int") || (fieldData[i].fieldType == "double")) {
+		                if ((fieldData[i].fieldType == "integer") || (fieldData[i].fieldType == "double")) {
 		                    col.xtype = 'numbercolumn';
-		                    if (fieldData[i].fieldType == "int") {
+		                    if (fieldData[i].fieldType == "integer") {
 		                        // do not show decimals
 		                        col.format = '0,000';
 		                    }

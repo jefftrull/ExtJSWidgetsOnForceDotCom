@@ -37,6 +37,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
         if (!objTypeMap.containsKey(objName)) {
         	throw new DescribeException('No SObject named ' + objName + ' found');
         }
+        // TODO: check for accessibility as well
         Schema.SObjectType sobj = objTypeMap.get(objName);
         Map<String, Schema.SObjectField> fieldMap = sobj.getDescribe().fields.getMap();
         // iterate, supplying meta information in format Ext likes
@@ -78,6 +79,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
         public Integer total;
         CRUDResponse() {
             records = new List<Map<String, String> >();
+            success = true;
         }
     }
     
@@ -129,9 +131,35 @@ global with sharing class ExtJSStoreRemotingCtrl {
         	resp.errorMessage = e.getMessage();
         	return resp;
         }
-        resp.success = true;
 		resp.total = current_result;
         return resp;
+	}
+
+	// Utility method to refresh newly created/updated objects after the DML operation, for returning to the grid
+	global static CRUDResponse refreshObjects(String crudData, List<SObject> sobjs) {
+		CRUDResponse resp = new CRUDResponse();
+
+		Map<String, String> params = mapUnpack(crudData);
+		String objName = params.get('sobjname');
+        String fieldList = params.get('fields');
+        String[] fieldNames = fieldList.split(',');
+        Set<ID> updatedIds = new Set<ID>();
+        for (SObject sobj : sobjs) {
+        	updatedIds.add(sobj.id);
+        }
+        for (List<SObject> rlit : Database.query('SELECT ' + fieldList + ' FROM ' + objName +
+        										 ' WHERE Id IN :updatedIds')) {
+        	for (SObject rit : rlit) {
+            	Map<String, String> objmap = new Map<String, String>();
+            	for (String field : fieldNames) {
+            		if (rit.get(field) != null) {
+            			objmap.put(field, String.valueOf(rit.get(field)));
+            		}
+            	}
+                resp.records.add(objmap);
+        	}
+        }
+   		return resp;		
 	}
 
 	// Create and Update are very similar.
@@ -152,17 +180,12 @@ global with sharing class ExtJSStoreRemotingCtrl {
     		return resp;
     	}
 
-    	for (SObject sobj : sobjs) {
-    		Map<String, String> rec = new Map<String, String>();
-    	    rec.put('id', String.valueOf(sobj.Id));
-    		resp.records.add(rec);
-    	}
-    	return resp;
+ 		return refreshObjects(crudData, sobjs);
     }
 
     // "update" and "delete" are keywords so must pick something else
-    // Ken Thompson is supposed to have said that if he could redo anything about Unix, he'd spell "creat" with an extra "e"
-	// So in that spirit:
+    // Ken Thompson is supposed to have said that if he could redo anything about Unix,
+    // he'd spell "creat" with an extra "e".  So in that spirit:
     @RemoteAction
     global static CRUDResponse updat(String crudData) {
 		CRUDResponse resp = new CRUDResponse();
@@ -179,21 +202,19 @@ global with sharing class ExtJSStoreRemotingCtrl {
     		return resp;
     	}
 
-    	for (SObject sobj : sobjs) {
-    		Map<String, String> rec = new Map<String, String>();
-    	    rec.put('id', String.valueOf(sobj.Id));
-    		resp.records.add(rec);
-    	}
-    	return resp;
+ 		return refreshObjects(crudData, sobjs);
     }
     
     @RemoteAction
     global static CRUDResponse delet(String crudData) {
-    	Map<String, String> argobj = mapUnpack(crudData);
-		// Ext supplies just a list of Id's to delete.  Let's take advantage of that and not construct SObjects
-    	List<String> idlist = listUnpack(argobj.get('records'));
-    	CRUDResponse resp = new CRUDResponse();
-    	resp.success = true;
+		CRUDResponse resp = new CRUDResponse();
+
+		// produce a list of IDs from each supplied sObject
+		List<String> sobjs = listUnpack(mapUnpack(crudData).get('records'));
+    	List<String> idlist = new List<String>();
+    	for (String sobj : sobjs) {
+    		idlist.add(mapUnpack(sobj).get('id'));
+    	}
     	
     	try {
     		Database.delete(idlist);
@@ -237,26 +258,34 @@ global with sharing class ExtJSStoreRemotingCtrl {
     		Map<String, String> recmap = mapUnpack(rec);
     		SObject sobj;
     		if (recmap.containsKey('id')) {
-    			// create SObject using supplied Id (setting it as a field will fail)
+      			// create SObject using supplied Id (setting it as a field will fail)
     			sobj = sobjToken.newSObject(recmap.get('id'));
     		} else {
     			sobj = sobjToken.newSObject();
     		}
 			for (String k : recmap.keySet()) {
+				// definitely an empty value if null, empty string, or the string 'null' but the type is not string
+				// TODO it does seem like I should be able to map 'null' to null somehow in mapUnpack()
+				Boolean emptyValue = (recmap.get(k) == null) || (recmap.get(k) == '') ||
+									  (fieldMap.get(k).getDescribe().getType() != Schema.DisplayType.string) &&
+									  (recmap.get(k) == 'null');
 				if ((k != 'id') &&  // never try to set Id this way (see above)
 					((action == 'update') || // don't try to set an empty value unless this is an update
-					 (recmap.get(k) != null) && (recmap.get(k) != ''))) {
-					// Date fields appear to need to be set from Date values, not strings, so:
-					if (fieldMap.get(k).getDescribe().getType() == Schema.DisplayType.date) {
-						if ((recmap.get(k) == null) || (recmap.get(k) == '')) {
-							// don't try to parse as a date - just use null
-							sobj.put(k, null);
-						} else {
-							sobj.put(k, Date.valueOf(recmap.get(k)));
-						}
+					 !emptyValue)) {
+					if (emptyValue) {
+						sobj.put(k, null);
+					} else if (fieldMap.get(k).getDescribe().getType() == Schema.DisplayType.date) {
+						// Date fields appear to need to be set from Date values, not strings, so:
+						sobj.put(k, Date.valueOf(recmap.get(k)));
+					} else if (fieldMap.get(k).getDescribe().getType() == Schema.DisplayType.boolean) {
+						sobj.put(k, Boolean.valueOf(recmap.get(k)));
+					} else if (fieldMap.get(k).getDescribe().getType() == Schema.DisplayType.integer) {
+						sobj.put(k, Integer.valueOf(recmap.get(k)));
+					} else if (fieldMap.get(k).getDescribe().getType() == Schema.DisplayType.double) {
+						sobj.put(k, Double.valueOf(recmap.get(k)));
 					} else {
 						sobj.put(k, recmap.get(k));
-					}
+					} // TODO: handle other types, esp. Currency
 				}
 			}
 			sobjs.add(sobj);
