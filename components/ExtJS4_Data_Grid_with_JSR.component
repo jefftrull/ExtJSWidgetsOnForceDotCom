@@ -1,0 +1,297 @@
+<!-- 
+Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+ -->
+<apex:component controller="ExtJSStoreRemotingCtrl">
+    <!-- A Visualforce component implementing an ExtJS4 grid backed by JS Remoting from a controller -->
+    <!-- Jeff Trull 8/10/2011 -->
+    <apex:attribute name="object" type="String" description="sObject to generate a grid for" required="true"/>
+    <apex:attribute name="fields" type="String[]" description="list of fields to display" required="true"/>
+    <apex:attribute name="minimized" type="Boolean" description="whether to initially render the grid in minimized state" default="false"/>
+    <apex:attribute name="rows" type="int" description="how many rows to display in grid" default="19"/>
+
+    <!-- load ExtJS -->
+    <apex:stylesheet value="{!$Resource.ExtJS4}/ext-4.0.2a/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS4}/ext-4.0.2a/ext-all-debug.js"/>       
+    <script type="text/javascript">
+        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS4}/ext-4.0.2a/resources/themes/images/default/tree/s.gif"
+    </script>
+
+    <!-- Icons.  Using those included with ExtJS. -->
+    <style type="text/css">
+        .icon-add
+        {
+            background:url({!$Resource.ExtJS4}/ext-4.0.2a/examples/shared/icons/fam/add.gif) 0 no-repeat !important
+        }
+        .icon-delete
+        {
+            background:url({!$Resource.ExtJS4}/ext-4.0.2a/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
+        }
+    </style>
+
+    <script>
+    	Ext.onReady(function() {
+    		// BUG WORKAROUNDS
+    		// 1) DirectProxy gets perfectly fine formatted data from api calls, then discards it
+    		// This may simply be a difference between ExtJS 3 (used by Remoting) and 4...
+    		Ext.data.proxy.Direct.prototype.createRequestCallback =
+    		    function(request, operation, callback, scope){
+        			var me = this;
+        			return function(data, event){
+        				// supply "data" (properly processed data), not "event", as fourth arg
+            			me.processResponse(event.status, operation, request,
+            							   {data: data}, callback, scope);
+        			};
+    			};
+ 
+			// 2) DirectProxy does not supply extraParams to create/update/delete calls - only reads
+			// Solved by making a special writer that inserts them into the regular data
+			Ext.define('Jet.SFDC.writer', {
+			    extend: 'Ext.data.writer.Json',
+			    alias: 'writer.sfdc',
+			    config: {extraParams: undefined},
+			    constructor: function(config) {
+			    	this.callParent([config]);
+			    },
+			    writeRecords: function(request, data) {
+			    	this.callParent([request, data]);
+			    	if ((this.extraParams !== undefined) && (this.extraParams instanceof Object)) {
+			    		Ext.apply(request.jsonData, this.extraParams);
+			    	}
+			    	return request;
+			    }});
+
+        	// use JS Remoting to get field metadata info
+        	// TODO check for creatability/updatability of the chosen SObject type by this user
+        	ExtJSStoreRemotingCtrl.describeFields('{!object}', String('{!fields}').toLowerCase(),
+        		function(fieldData, e) {
+        			if (!e.status) {
+        				Ext.Msg.alert('Server error', e.message);
+        				return;
+        			}
+					// define a Model using the information returned from the SObject describe call
+		        	var extfields = [];
+		        	var fieldlist = String('{!fields}').toLowerCase().split(',');
+		            if (fieldlist.indexOf('id') == -1) {
+		                extfields.push({
+		                    name: 'id',
+		                    // Workaround: in Ext 3 (nonexistent) id property was removed from phantom records
+		                    persist: false  // make sure we don't try to output this on create.
+		                }); // always include ID in the store
+		            }
+		            for (var i = 0; i < fieldData.length; i++) {
+		            	var field = {name: fieldData[i].name, type: fieldData[i].fieldType};
+		            	if (fieldData[i].fieldType == "date") {
+		            		// having trouble with dates for some reason.  Need to manually specify here.
+		            		field.dateFormat = "Y-m-d H:i:s";    // as supplied by String.valueOf on the server
+							field.type = "date";
+		            	}
+						else if (fieldData[i].fieldType == "double") {
+							field.type = "float";
+						} else if (fieldData[i].fieldType == "boolean") {
+							field.type = "bool";
+						} else if ((fieldData[i].fieldType == "integer") || (fieldData[i].fieldType == "boolean")) {
+							field.type = fieldData[i].fieldType;
+						} else {
+							field.type = "string";
+						}
+						if (field.name == 'id') {
+							field.persist = false;
+						}
+		            	// TODO add validations (list of valid values, regex, min/max) if possible
+		            	// known possible checks: precision, scale, updateable/createable, max length for strings
+		            	extfields.push(field);
+		            }
+		            // TODO add associations to other models
+		            var modelName = Ext.String.capitalize("{!object}");
+		            var extraParams = {sobjname: '{!object}',    // will be sent along with start, limit, etc.
+		           					 	  fields: String('{!fields}').toLowerCase()};
+					Ext.define(modelName, {
+						extend: 'Ext.data.Model',
+						fields: extfields,
+						proxy: {
+							type: 'direct',
+							api: {read:     ExtJSStoreRemotingCtrl.query,
+        						  create:   ExtJSStoreRemotingCtrl.create,
+        						  update:   ExtJSStoreRemotingCtrl.updat,
+        						  destroy:  ExtJSStoreRemotingCtrl.delet
+        						  },
+        					reader: {type: 'json',
+        							 root: 'records',
+        							 messageProperty: 'errorMessage'
+        							},
+			           		writer: {
+			           			type: 'sfdc',
+			           			root: 'records',
+			           			writeAllFields: false,   // otherwise empty fields will transmit as empty strings, instead of "null"/not present
+			           			extraParams: extraParams,
+			           			allowSingle: false,   // need to always be an array for code simplification
+			                	encode:  false        // docs say "set this to false when using DirectProxy"
+			            	},
+			            	listeners: {
+			            		exception: {fn: function(proxy, response, operation) {
+			            							// TODO: some errors are still not propagated correctly to the user by this code...
+			            							// investigation needed
+			            							console.log('got exception with response=', response, 'operation=', operation);
+			            							if (response.data) {
+			            								if (response.data.errorMessage) {
+			            									// my custom field is present; let's use it
+			            									Ext.Msg.alert('Error', response.data.errorMessage);
+			            								} else {
+			            									Ext.Msg.alert('Error', operation.action + ' failed: ' + response.data.message);
+														}
+													}
+			            						}
+			            				   }},
+							extraParams: extraParams
+        				}});
+		            var pagesize = parseInt('{!rows}'); // otherwise we end up with a string value, which subtly fails
+        			// create a store that uses the Model
+        			var store = new Ext.data.Store({
+        				model: Ext.String.capitalize("{!object}"),
+		                pageSize: pagesize,
+        				remoteSort: true,
+        				autoLoad: true,
+						// Instead of using store's "autoSync" feature, sync to server on update and remove,
+						// but not add/create, as the initial record will be blank and probably fail validation
+        				listeners: {
+        					remove: {fn: function() {
+        									store.sync();
+        								}},
+        					update: {fn: function() {
+        									store.sync();
+        								}}
+        				}});
+					
+	       			// and a grid that uses the Store
+        			// define its columns using previously accessed metadata
+        			var columns = [];
+		            for (var i = 0; i < fieldData.length; i++) {
+		                var col = {
+		                    dataIndex: fieldData[i].name,
+		                    text: fieldData[i].label,
+		                    sortable: fieldData[i].sortable,
+		                    width: 150
+        				}
+		                // use data type from above to determine type of Editor and xtype to use
+		                if ((fieldData[i].fieldType == "integer") || (fieldData[i].fieldType == "double")) {
+		                    col.xtype = 'numbercolumn';
+		                    if (fieldData[i].fieldType == "integer") {
+		                        // do not show decimals
+		                        col.format = '0,000';
+		                    }
+		                } else if (fieldData[i].fieldType == "boolean") {
+		                    col.xtype = 'booleancolumn';
+		                    col.trueText = 'Yes';
+		                    col.falseText = 'No';
+		                } else if (fieldData[i].fieldType == "date") {
+		                    col.xtype = 'datecolumn';
+		                }
+		                // set up editors for modifiable fields
+	                    if (fieldData[i].modifiable) {
+	                    	if (fieldData[i].fieldType == "date") {
+	                    		col.editor = {xtype : 'datefield'};
+	                    	} else if (fieldData[i].fieldType == "boolean") {
+	           					// ideally would use checkbox here, but it seems Ext 4 has moved this into examples...
+	           					// there is a "checkboxfield", but then it shows up as Yes/No until you click to edit, which is ugly
+								var options = [[true, 'Yes'], [false, 'No']];
+								if (fieldData[i].nillable) {
+									options.push(['', null]);
+								}
+	                    		col.editor = {xtype : 'combobox',
+	                    					  store : options};
+	                    	} else if (fieldData[i].fieldType == "picklist") {
+	                    		col.editor = {xtype : 'combobox',
+	                    					  store : fieldData[i].picklistValues};
+	                    	} else if ((fieldData[i].fieldType == "integer") || (fieldData[i].fieldType == "double")) {
+								col.editor = {xtype : 'numberfield'};
+	                    	} else {
+	                    		col.editor = {xtype : 'textfield'};
+	                    	}
+	                    	col.editor.allowBlank = fieldData[i].nillable;
+	                    	if (fieldData[i].fieldType == "double") {
+	                    		col.editor.allowDecimals = true;
+	                    	}
+	                    	// validators for special text field types
+	                        if ((fieldData[i].fieldType == "url") || (fieldData[i].fieldType == "email")) {
+	                            col.editor.vtype = fieldData[i].fieldType;
+	                        }
+	                    }
+		                columns.push(col);
+		            }
+		            var rowEditing = Ext.create('Ext.grid.plugin.RowEditing', {
+		            					clicksToEdit: 2 // to more easily distinguish editing from row selection
+		            				});
+					var grid = Ext.create('Ext.grid.Panel', {
+					    title: modelName,
+					    store: store,
+					    columns: columns,
+					    selModel: {xtype : 'rowmodel',
+					    		   mode : 'MULTI'},
+					    // enable editing
+					    plugins: [rowEditing],
+					    // paging toolbar at bottom
+		                bbar: Ext.create('Ext.PagingToolbar', {
+		                    store: store,
+		                    displayInfo: true,
+		                    displayMsg: 'Displaying objects {0} - {1} of {2}',
+		                    emptyMsg: 'no records found'
+		                }),
+		                // add/delete buttons at top
+					    dockedItems: [{
+				            xtype: 'toolbar',
+				            items: [{
+				                text: 'Add',
+				                iconCls: 'icon-add',
+				                handler: function(){
+				                    // empty record
+									// TODO insert default field values, if any (Field can take one, will that do?)
+				                    store.insert(0, Ext.create(modelName, {}));
+				                    rowEditing.startEdit(0, 0);
+				                }
+				            }, '-', {
+				                itemId: 'delete',
+				                text: 'Delete',
+				                iconCls: 'icon-delete',
+				                disabled: true,
+				                handler: function(){
+				                    var selections = grid.getView().getSelectionModel().getSelection();
+				                    if (selections) {
+				                    	// verify the user wants to do this
+				                    	Ext.Msg.show({title: 'Delete Rows',
+				                    				  msg: String.format('Remove these {0} entries from {1}?',
+				                    									 selections.length, modelName),
+				                    				  buttons: Ext.Msg.OKCANCEL,
+				                    				  fn: function(btn, txt) {
+				                    				   		if (btn == 'ok') {
+				                        						store.remove(selections);
+				                        					}
+				                        			  }});
+				                    }
+				                }
+				            }]
+				        }],
+					    height: 460,
+					    renderTo: 'myGrid'
+					});
+					// disable delete button if no row is selected
+					grid.getSelectionModel().on('selectionchange', function(selModel, selections){
+				        grid.down('#delete').setDisabled(selections.length === 0);
+				    });
+					
+        		});
+    	});
+    </script>
+    <div id="myGrid"/>
+</apex:component>

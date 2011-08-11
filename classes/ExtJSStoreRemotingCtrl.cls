@@ -94,16 +94,19 @@ global with sharing class ExtJSStoreRemotingCtrl {
         String fieldList = params.get('fields');
         Integer startRecord = Integer.valueOf(params.get('start'));
         Integer recordCount = Integer.valueOf(params.get('limit'));
-        String sortField, sortDir;
-        if (params.get('sort') != null) {
-        	sortField = params.get('sort');
-        	sortDir = params.get('dir');
-        }
         // construct a query string
         String qstr = 'SELECT ' + fieldList + ' FROM ' + objName;
-		if (sortField != null) {
-			qstr += ' ORDER BY ' + sortField + ' ' + sortDir;
-		}
+        if (params.get('sort') != null) {
+        	qstr += ' ORDER BY ';
+        	// collect sort fields/directions
+        	List<String> sorts = listUnpack(params.get('sort'));
+        	qstr += mapUnpack(sorts[0]).get('property');
+        	for (Integer i = 1; i < sorts.size(); i++) {
+        		qstr += ',' + mapUnpack(sorts[i]).get('property');
+        	}
+        	// SOQL only supports a single direction, so ignoring others. Probably should return error instead.
+        	qstr += ' ' + mapUnpack(sorts[0]).get('direction');
+        }
 		qstr = String.escapeSingleQuotes(qstr);   // sanitize for SOQL injection
         // no LIMIT here or our "total" numbers will be wrong for the grid
         // alternatively: do two SOQL calls, one to get the total, one to get requested data
