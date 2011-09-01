@@ -283,7 +283,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 				            }]
 				        }],
 					    height: 460,
-					    renderTo: 'myGrid'
+					    renderTo: '{!$Component.myGrid}'
 					});
 					// disable delete button if no row is selected
 					grid.getSelectionModel().on('selectionchange', function(selModel, selections){
@@ -293,5 +293,5 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         		});
     	});
     </script>
-    <div id="myGrid"/>
+    <apex:outputPanel id="myGrid" layout="block"/>
 </apex:component>
