@@ -1,0 +1,62 @@
+<apex:component controller="CampaignHierarchyController">
+	<!-- a VF component for selecting a campaign from the hierarchy with an ExtJS menu tree -->
+	<!-- Jeff Trull 2010-09-18 -->
+	<apex:attribute name="allowinactiveselect" type="Boolean" description="Whether to permit users to select inactive Campaigns" default="false"/>
+	<apex:attribute name="fn" type="String" description="name of a Javascript function to call with ID once a Campaign is selected." required="true"/>
+
+	<!-- load ExtJS -->
+    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.4.0/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/adapter/ext/ext-base.js"/>
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/ext-all.js"/>       
+    <script type="text/javascript">
+    	Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/resources/images/default/s.gif"
+    </script>
+
+	<!-- Style to better mimic the look of the Campaign tab -->
+    <style type="text/css">
+        .x-tree-root-ct { background-color: #F3F3EC }
+    </style>
+
+	<script>
+		Ext.onReady(function() {
+			// Build campaign menu tree from controller data
+            var campMenu = new Ext.menu.Menu({id: 'campMenu'});  
+            var clickAction = function(n) { {!fn}(n.id.substr(4)); }  // execute supplied callback
+            var allowinactive = ("{!allowinactiveselect}" == "true");
+                                    
+            var parentMenu;                                                                                                             
+            <apex:repeat value="{!CampaignTree}" var="c" id="menuitems">                                                                
+                // add this Campaign as a menu item.  Use a munged version of the actual ID for the record for reference                
+                parentMenu = Ext.ComponentMgr.get(("{!c.parentid}" == "") ? "campMenu" : ("MENU" + "{!c.parentid}"));                   
+                if ("{!c.isleaf}" == "true") {
+                    parentMenu.add({id : ("CAMP" + "{!c.id}"), text : "{!c.name}", hidden : {!NOT(c.isActive)} && !allowinactive,
+                    handler: clickAction});
+                }
+                else {            
+                    // define submenu as well, for future children
+                    // inactive non-leafs are disabled, but not hidden, in case their children are active for some reason
+                   if ({!NOT(c.isActive)} && !allowinactive) {
+                    	// This campaign should be disabled for selection, but still present as a submenu,
+                    	// in case it has active children
+                    	parentMenu.addMenuItem({id : ("CAMP" + "{!c.id}"), text : "{!c.name}",
+                    		                    menu : {id : ("MENU" + "{!c.id}")}, cls: 'x-item-disabled'});  // no handler connection
+                    } else {
+                        parentMenu.addMenuItem({id : ("CAMP" + "{!c.id}"), text : "{!c.name}",
+                    		                    menu : {id : ("MENU" + "{!c.id}")}, handler: clickAction});
+                    }
+                }                                                                                                                      
+            </apex:repeat>                                                                                                                            
+
+            // make a button for the menu to live in
+            var tb = new Ext.Button(
+            {
+                text:'Campaign Select Menu',
+                menu: campMenu,
+                renderTo: 'tbd'
+            });
+		});
+	</script>
+
+    <div id="tbd"/>
+
+</apex:component>

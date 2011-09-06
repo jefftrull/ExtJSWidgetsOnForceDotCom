@@ -1,0 +1,21 @@
+<apex:page standardController="Opportunity">
+	<!-- A page to test using the campaign menu component -->
+	<apex:form >
+		<apex:pageBlock title="Selecting Campaigns via Menu Tree" tabStyle="Campaign">
+			<c:Campaign_Select_Menu fn="rerender_detail"/>
+		</apex:pageBlock>
+		<apex:pageBlock title="Selecting Campaigns via TreePanel">
+			<c:Campaign_Select_Tree fn="rerender_detail" allowinactiveselect="true"/>
+		</apex:pageBlock>
+		<apex:pageBlock title="Selected Campaign Details" id="campaign_pageblock" tabStyle="Campaign">
+        	<apex:pageBlockSection columns="4">
+            	<apex:outputField id="campid" value="{!opportunity.campaignid}"/><br>
+        	</apex:pageBlockSection>
+    	</apex:pageBlock>
+    	<!-- Create an action to update the campaign ID from the selected value and rerender the campaign information -->
+		<apex:actionFunction name="rerender_detail" rerender="campaign_pageblock">
+			<!-- It seems if you call this param "ID", bad things will happen -->
+			<apex:param name="sekritid" assignTo="{!opportunity.campaignid}" value=""/>
+		</apex:actionFunction>
+	</apex:form>
+</apex:page>

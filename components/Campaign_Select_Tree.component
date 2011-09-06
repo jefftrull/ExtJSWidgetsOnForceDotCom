@@ -1,0 +1,51 @@
+<apex:component controller="CampaignHierarchyController">
+	<!-- a VF component for selecting a campaign from the hierarchy with an ExtJS TreePanel -->
+	<!-- Jeff Trull 2010-09-19 -->
+	<apex:attribute name="allowinactiveselect" type="Boolean" description="Whether to permit users to select inactive Campaigns" default="false"/>
+	<apex:attribute name="fn" type="String" description="name of a Javascript function to call with ID once a Campaign is selected." required="true"/>
+
+	<!-- load ExtJS -->
+    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.4.0/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/adapter/ext/ext-base.js"/>
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/ext-all.js"/>       
+    <script type="text/javascript">
+    	Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.4.0/resources/images/default/s.gif"
+    </script>
+
+    <script type="text/javascript">
+        Ext.onReady(function(){
+            var allowinactive = ("{!allowinactiveselect}" == "true");
+        	var tree = new Ext.tree.TreePanel({
+                renderTo: 'treediv',
+                useArrows: true,
+                autoScroll: true,
+                animate: true,
+                containerScroll: true,
+                border: false,
+                root: new Ext.tree.TreeNode({
+                    text: 'All Campaigns',
+                    expanded: true,
+                    disabled: true,
+                    id: 'camproot'
+                }),
+                listeners: {
+                    // for the treepanel - but apparently not the menu - I can define a single event function for the whole thing
+                    click: function(n) { {!fn}(n.id.substr(4)); }  // execute supplied callback
+                }
+            });
+            // add the campaigns as tree nodes
+            var parentNode;
+            <apex:repeat value="{!CampaignTree}" var="c" id="treenodes">
+                // add this Campaign as a menu item
+                parentNode = tree.getNodeById(("{!c.parentid}" == "") ? "camproot" : ("NODE" + "{!c.parentid}"));
+                parentNode.appendChild(new Ext.tree.TreeNode({id : ("NODE" + "{!c.id}"), text : "{!c.name}", leaf : "{!c.isleaf}",
+                                                              // do not allow selecting inactive campaigns
+                                                              disabled : !allowinactive && {!NOT(c.isActive)},
+                                                              // if they are leafs, do not even show them...
+                                                              hidden : !allowinactive && {!AND(c.isLeaf, NOT(c.isActive))}}));
+            </apex:repeat>
+        });
+    </script>
+    <div id="treediv"/>
+
+</apex:component>

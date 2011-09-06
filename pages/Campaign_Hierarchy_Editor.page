@@ -1,0 +1,16 @@
+<apex:page standardController="Campaign">
+	<!-- Campaign hierarchy editor using custom VF component based on ExtJS TreePanel widget -->
+	<!-- by Jeff Trull <jetrull@sbcglobal.net> 2010-12-03 -->
+	<apex:form >
+		<apex:pageBlock title="Campaign Hierarchy Editor" tabStyle="Campaign">
+			<c:Hierarchy_Editor object="Campaign" fn="rerender_detail"/>
+		</apex:pageBlock>
+		<apex:actionFunction name="rerender_detail" rerender="campaigndetails">
+			<apex:param name="campid_passthru" assignTo="{!campaign.Id}" value=""/>
+		</apex:actionFunction>
+		<apex:outputPanel id="campaigndetails">
+			<apex:outputText value="Double-click to display details of a Campaign" rendered="{!campaign.id == null}"/>
+			<apex:detail title="Selected Campaign Details" rendered="{!campaign.id != null }" subject="{!campaign.id}" relatedList="false"/>
+		</apex:outputPanel>
+	</apex:form>
+</apex:page>
