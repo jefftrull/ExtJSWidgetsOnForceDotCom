@@ -298,6 +298,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
 	}
 
 	// Extremely remedial JSON "parser".  For a proper implementation see Ron Hess's popular contribution on Code Share
+	// Note: actually, it's not even JSON.  Contains "=" instead of ":".
 
 	// Unpack client parameters. No error checking.
 	static Map<String, String> mapUnpack(String pmap) {
@@ -344,22 +345,63 @@ global with sharing class ExtJSStoreRemotingCtrl {
 
 		List<String> items = new List<String>();
 		Integer offset = 0;   // current scanning point
+		Pattern commaSep = Pattern.compile(', *');   // comma plus zero or more spaces
+		Matcher commaMatch = commaSep.matcher(plist);
 		while (offset < plist.length()) {
 			Integer valueEnd;
+			// locate the next list item, which is either a curly brace enclosed sequence of
+			// characters, or whatever is between here and the next comma
 			if (plist.substring(offset, offset + 1) == '{') {
 				valueEnd = plist.indexOf('}', offset + 1) + 1;
-			} else if (plist.indexOf(', ', offset) > 0) {
-				valueEnd = plist.indexOf(', ', offset);
+				commaMatch.region(valueEnd, commaMatch.regionEnd());
+				items.add(plist.substring(offset, valueEnd));
+				if (commaMatch.find()) {
+					// a comma follows the closing curly brace.  Skip it.
+					offset = commaMatch.end();
+				} else {
+					offset = valueEnd;
+				}
 			} else {
-				// use the end of the string
-				valueEnd = plist.length();
-			}
-			items.add(plist.substring(offset, valueEnd));
-			offset = valueEnd;
-			if ((offset < (plist.length() - 1)) && (plist.substring(offset, offset + 2) == ', ')) {
-				offset += 2;
-			}
+				commaMatch.region(offset, commaMatch.regionEnd());
+				if (commaMatch.find()) {
+					valueEnd = commaMatch.start();
+					items.add(plist.substring(offset, valueEnd));
+					offset = commaMatch.end();
+				} else {
+					valueEnd = plist.length();
+					items.add(plist.substring(offset, valueEnd));
+					offset = valueEnd;
+				}
+			}			
 		}
 		return items;
+	}
+	
+	// Test JSON map/list/SObject deserialization methods
+	static testmethod
+	void testListUnpack() {
+		// a basic test
+		List<String> result = listUnpack('[1, {some:\'map\'}, \'scalar\']');
+		System.assertEquals(3, result.size());
+		System.assertEquals('1', result[0]);
+		System.assertEquals('{some:\'map\'}', result[1]);
+		System.assertEquals('\'scalar\'', result[2]);
+		// empty list
+		result = listUnpack('[]');
+		System.assert(result.isEmpty());
+		// no space after commas
+		result = listUnpack('[1,2]');
+		System.assertEquals(2, result.size());
+		System.assertEquals('1', result[0]);
+		System.assertEquals('2', result[1]);
+		// embedded square brackets
+		result = listUnpack('[2, \'charlie]\']');
+		System.assertEquals(2, result.size());
+		System.assertEquals('2', result[0]);
+		System.assertEquals('\'charlie]\'', result[1]);
+		// commas embedded in curly braces
+		result = listUnpack('[{a, b}]');
+		System.assertEquals(1, result.size());
+		System.assertEquals('{a, b}', result[0]);
 	}
 }
