@@ -141,14 +141,19 @@ global with sharing class ExtJSStoreRemotingCtrl {
         return resp;
 	}
 
+	// C,U,D methods from DirectProxy all have the same argument format:
+	global class CRUDData {
+		public String sobjname;
+		public String fields;
+		public List<Map<String, String> > records;
+	}
 
 	// Utility method to refresh newly created/updated objects after the DML operation, for returning to the grid
-	global static CRUDResponse refreshObjects(String crudData, List<SObject> sobjs) {
+	global static CRUDResponse refreshObjects(CRUDData crudData, List<SObject> sobjs) {
 		CRUDResponse resp = new CRUDResponse();
 
-		Map<String, String> params = mapUnpack(crudData);
-		String objName = params.get('sobjname');
-        String fieldList = params.get('fields');
+		String objName = crudData.sobjname;
+        String fieldList = crudData.fields;
         String[] fieldNames = fieldList.split(',');
         Set<ID> updatedIds = new Set<ID>();
         for (SObject sobj : sobjs) {
@@ -169,11 +174,10 @@ global with sharing class ExtJSStoreRemotingCtrl {
    		return resp;		
 	}
 
-
 	// Create and Update are very similar.
 	// Create supplies all specified fields but no Id; Update specifies Id and only the fields that changed
     @RemoteAction
-    global static CRUDResponse create(String crudData) {
+    global static CRUDResponse create(CRUDData crudData) {
 		CRUDResponse resp = new CRUDResponse();
 		List<SObject> sobjs = unpackSobjects('create', crudData, resp);
 		if (!resp.success) {
@@ -195,7 +199,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
     // Ken Thompson is supposed to have said that if he could redo anything about Unix,
     // he'd spell "creat" with an extra "e".  So in that spirit:
     @RemoteAction
-    global static CRUDResponse updat(String crudData) {
+    global static CRUDResponse updat(CRUDData crudData) {
 		CRUDResponse resp = new CRUDResponse();
 		List<SObject> sobjs = unpackSobjects('update', crudData, resp);
 		if (!resp.success) {
@@ -214,14 +218,14 @@ global with sharing class ExtJSStoreRemotingCtrl {
     }
     
     @RemoteAction
-    global static CRUDResponse delet(String crudData) {
+    global static CRUDResponse delet(CRUDData crudData) {
 		CRUDResponse resp = new CRUDResponse();
 
 		// produce a list of IDs from each supplied sObject
-		List<String> sobjs = listUnpack(mapUnpack(crudData).get('records'));
+		List<Map<String, String> > sobjs = crudData.records;
     	List<String> idlist = new List<String>();
-    	for (String sobj : sobjs) {
-    		idlist.add(mapUnpack(sobj).get('id'));
+    	for (Map<String, String> sobj : sobjs) {
+    		idlist.add(sobj.get('id'));
     	}
     	
     	try {
@@ -238,16 +242,15 @@ global with sharing class ExtJSStoreRemotingCtrl {
 	
 	// create, update, and delete all supply things that resemble SObjects
 	// (although update only has changed fields and delete only has IDs)
-	static List<SObject> unpackSobjects(String action, String crudData, CRUDResponse resp) {
-		Map<String, String> argobj = mapUnpack(crudData);
+	static List<SObject> unpackSobjects(String action, CRUDData crudData, CRUDResponse resp) {
 		resp.success = false;
 
 		// use "base" params to find the sobject type we need to create
-		if (!argobj.containsKey('sobjname')) {
+		if (crudData.sobjname == null) {
 			resp.errorMessage = 'SObject name not supplied in client call';
 			return null;
 		}
-		String objName = argobj.get('sobjname');
+		String objName = crudData.sobjname;
         Map<String, Schema.SObjectType> objTypeMap = Schema.getGlobalDescribe();
         if (!objTypeMap.containsKey(objName)) {
         	resp.errorMessage = 'No SObject named ' + objName + ' found';
@@ -256,14 +259,13 @@ global with sharing class ExtJSStoreRemotingCtrl {
         Schema.SObjectType sobjToken = objTypeMap.get(objName);  // "token" representing this sObject type
         Map<String, Schema.SObjectField> fieldMap = sobjToken.getDescribe().fields.getMap();
         
-    	if (!argobj.containsKey('records')) {
+    	if (crudData.records == null) {
     		resp.errorMessage = 'argument ' + crudData + ' contained no records field';
     		return null;
     	}
-    	List<String> records = listUnpack(argobj.get('records'));
+    	List<Map<String, String> > records = crudData.records;
     	List<SObject> sobjs = new List<SObject>();
-    	for (String rec : records) {
-    		Map<String, String> recmap = mapUnpack(rec);
+    	for (Map<String, String> recmap : records) {
     		SObject sobj;
     		if (recmap.containsKey('id')) {
       			// create SObject using supplied Id (setting it as a field will fail)
@@ -300,113 +302,5 @@ global with sharing class ExtJSStoreRemotingCtrl {
     	}
     	resp.success = true;
     	return sobjs;
-	}
-
-	// Extremely remedial JSON "parser".  For a proper implementation see Ron Hess's popular contribution on Code Share
-	// Note: actually, it's not even JSON.  Contains "=" instead of ":".
-
-	// Unpack client parameters. No error checking.
-	static Map<String, String> mapUnpack(String pmap) {
-		Map<String, String> result = new Map<String, String>();
-		pmap = pmap.trim();									// remove leading/trailing spaces
-		pmap = pmap.substring(1, pmap.lastIndexOf('}'));	// remove leading/trailing curly braces
-
-		// pick up "key=value" pairs.  Treat square brackets as quotes
-		Integer offset = 0;   // current scanning point
-		while (pmap.indexOf('=', offset) > 0) {
-			// key=value pairs remain
-			Integer eqOffset = pmap.indexOf('=', offset);
-			String key = pmap.substring(offset, eqOffset);
-			// find the end of the value
-			Integer valueEnd;   // one past the end, actually (see "substring" documentation)
-			if (((eqOffset + 1) < pmap.length()) && // '=' may be immediately followed by end of string for empty values
-				(pmap.substring(eqOffset + 1, eqOffset + 2) == '[')) {
-				// skip to end of square brackets (note only one level supported)
-				valueEnd = pmap.indexOf(']', eqOffset + 1) + 1;
-			} else if (pmap.indexOf(', ', eqOffset + 1) > 0) {
-				// we are in the middle of a list
-				valueEnd = pmap.indexOf(', ', eqOffset + 1);
-			} else {
-				// use the end of the string
-				valueEnd = pmap.length();
-			}
-			result.put(key, pmap.substring(eqOffset + 1, valueEnd));
-
-			// move to next key/value pair
-			offset = valueEnd;
-			// skip separators, if any
-			if ((offset < (pmap.length() - 1)) && (pmap.substring(offset, offset + 2) == ', ')) {
-				offset += 2;
-			}
-		}
-		return result;
-	}
-
-	static List<String> listUnpack(String plist) {
-		// unpack square bracketed list, treating curly braces as quotes
-		List<String> result = new List<String>();
-		plist = plist.trim();
-		plist = plist.substring(1, plist.lastIndexOf(']'));
-
-		List<String> items = new List<String>();
-		Integer offset = 0;   // current scanning point
-		Pattern commaSep = Pattern.compile(', *');   // comma plus zero or more spaces
-		Matcher commaMatch = commaSep.matcher(plist);
-		while (offset < plist.length()) {
-			Integer valueEnd;
-			// locate the next list item, which is either a curly brace enclosed sequence of
-			// characters, or whatever is between here and the next comma
-			if (plist.substring(offset, offset + 1) == '{') {
-				valueEnd = plist.indexOf('}', offset + 1) + 1;
-				commaMatch.region(valueEnd, commaMatch.regionEnd());
-				items.add(plist.substring(offset, valueEnd));
-				if (commaMatch.find()) {
-					// a comma follows the closing curly brace.  Skip it.
-					offset = commaMatch.end();
-				} else {
-					offset = valueEnd;
-				}
-			} else {
-				commaMatch.region(offset, commaMatch.regionEnd());
-				if (commaMatch.find()) {
-					valueEnd = commaMatch.start();
-					items.add(plist.substring(offset, valueEnd));
-					offset = commaMatch.end();
-				} else {
-					valueEnd = plist.length();
-					items.add(plist.substring(offset, valueEnd));
-					offset = valueEnd;
-				}
-			}			
-		}
-		return items;
-	}
-	
-	// Test JSON map/list/SObject deserialization methods
-	static testmethod
-	void testListUnpack() {
-		// a basic test
-		List<String> result = listUnpack('[1, {some:\'map\'}, \'scalar\']');
-		System.assertEquals(3, result.size());
-		System.assertEquals('1', result[0]);
-		System.assertEquals('{some:\'map\'}', result[1]);
-		System.assertEquals('\'scalar\'', result[2]);
-		// empty list
-		result = listUnpack('[]');
-		System.assert(result.isEmpty());
-		// no space after commas
-		result = listUnpack('[1,2]');
-		System.assertEquals(2, result.size());
-		System.assertEquals('1', result[0]);
-		System.assertEquals('2', result[1]);
-		// embedded square brackets
-		result = listUnpack('[2, \'charlie]\']');
-		System.assertEquals(2, result.size());
-		System.assertEquals('2', result[0]);
-		System.assertEquals('\'charlie]\'', result[1]);
-		// commas embedded in curly braces
-		result = listUnpack('[{a, b}]');
-		System.assertEquals(1, result.size());
-		System.assertEquals('{a, b}', result[0]);
 	}
 }
