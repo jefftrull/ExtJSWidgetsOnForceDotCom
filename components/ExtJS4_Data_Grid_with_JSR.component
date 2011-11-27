@@ -127,6 +127,8 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         						  update:   ExtJSStoreRemotingCtrl.updat,
         						  destroy:  ExtJSStoreRemotingCtrl.delet
         						  },
+        					limitParam: 'recordCount',   // because "limit" is an Apex keyword
+        					sortParam: 'sortParams',     // because "sort" is a keyword too
         					reader: {type: 'json',
         							 root: 'records',
         							 messageProperty: 'errorMessage'

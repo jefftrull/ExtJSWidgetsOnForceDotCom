@@ -86,37 +86,40 @@ global with sharing class ExtJSStoreRemotingCtrl {
     // Unfortunately JS Remoting member functions must be static, so cannot access non-static class members,
     // which means we cannot cache query results in this controller but must respond to each request anew
 
+	global class QueryObj {
+		String sobjname;
+		String fields;
+		Integer start;
+		Integer recordCount;
+		Integer page;         // unused, but supplied by Ext so we cannot omit it
+		List<Map<String, String> > sortParams;
+	}
+
 	// turn grid's page load/sort request into SOQL and return data
 	@RemoteAction
-	global static CRUDResponse query(String arg1) {
-		Map<String, String> params = mapUnpack(arg1);
-		String objName = params.get('sobjname');
-        String fieldList = params.get('fields');
-        Integer startRecord = Integer.valueOf(params.get('start'));
-        Integer recordCount = Integer.valueOf(params.get('limit'));
+	global static CRUDResponse query(QueryObj qobj) {
         // construct a query string
-        String qstr = 'SELECT ' + fieldList + ' FROM ' + objName;
-        if (params.get('sort') != null) {
+        String qstr = 'SELECT ' + qobj.fields + ' FROM ' + qobj.sobjname;
+        if (qobj.sortParams != null) {
         	qstr += ' ORDER BY ';
         	// collect sort fields/directions
-        	List<String> sorts = listUnpack(params.get('sort'));
-        	qstr += mapUnpack(sorts[0]).get('property');
-        	for (Integer i = 1; i < sorts.size(); i++) {
-        		qstr += ',' + mapUnpack(sorts[i]).get('property');
+        	qstr += qobj.sortParams[0].get('property');
+        	for (Integer i = 1; i < qobj.sortParams.size(); i++) {
+        		qstr += ',' + qobj.sortParams[i].get('property');
         	}
         	// SOQL only supports a single direction, so ignoring others. Probably should return error instead.
-        	qstr += ' ' + mapUnpack(sorts[0]).get('direction');
+        	qstr += ' ' + qobj.sortParams[0].get('direction');
         }
 		qstr = String.escapeSingleQuotes(qstr);   // sanitize for SOQL injection
         // no LIMIT here or our "total" numbers will be wrong for the grid
         // alternatively: do two SOQL calls, one to get the total, one to get requested data
         CRUDResponse resp = new CRUDResponse();
         Integer current_result = 0;
-        String[] fieldNames = fieldList.split(',');
+        String[] fieldNames = qobj.fields.split(',');
         try {
 	        for (List<SObject> rlit : Database.query(qstr)) {
 	            for (SObject rit : rlit) {
-	                if ((current_result >= startRecord) && (current_result < (startRecord + recordCount))) {
+	                if ((current_result >= qobj.start) && (current_result < (qobj.start + qobj.recordCount))) {
 	                	Map<String, String> objmap = new Map<String, String>();
 	                	for (String field : fieldNames) {
 	                		if (rit.get(field) != null) {
@@ -137,6 +140,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
 		resp.total = current_result;
         return resp;
 	}
+
 
 	// Utility method to refresh newly created/updated objects after the DML operation, for returning to the grid
 	global static CRUDResponse refreshObjects(String crudData, List<SObject> sobjs) {
@@ -164,6 +168,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
         }
    		return resp;		
 	}
+
 
 	// Create and Update are very similar.
 	// Create supplies all specified fields but no Id; Update specifies Id and only the fields that changed
