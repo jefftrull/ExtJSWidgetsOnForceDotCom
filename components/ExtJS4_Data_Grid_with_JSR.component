@@ -71,10 +71,10 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 			    	}
 			    	return request;
 			    }});
-
+			
         	// use JS Remoting to get field metadata info
         	// TODO check for creatability/updatability of the chosen SObject type by this user
-        	ExtJSStoreRemotingCtrl.describeFields('{!object}', String('{!fields}').toLowerCase(),
+        	ExtJSStoreRemotingCtrl.describeFields('{!object}', String('{!fields}'),
         		function(fieldData, e) {
         			if (!e.status) {
         				Ext.Msg.alert('Server error', e.message);
@@ -82,10 +82,10 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         			}
 					// define a Model using the information returned from the SObject describe call
 		        	var extfields = [];
-		        	var fieldlist = String('{!fields}').toLowerCase().split(',');
-		            if (fieldlist.indexOf('id') == -1) {
+		        	var fieldlist = String('{!fields}').split(',');
+		            if (fieldlist.indexOf('Id') == -1) {
 		                extfields.push({
-		                    name: 'id',
+		                    name: 'Id',
 		                    // Workaround: in Ext 3 (nonexistent) id property was removed from phantom records
 		                    persist: false  // make sure we don't try to output this on create.
 		                }); // always include ID in the store
@@ -94,7 +94,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 		            	var field = {name: fieldData[i].name, type: fieldData[i].fieldType};
 		            	if (fieldData[i].fieldType == "date") {
 		            		// having trouble with dates for some reason.  Need to manually specify here.
-		            		field.dateFormat = "Y-m-d H:i:s";    // as supplied by String.valueOf on the server
+		            		field.dateFormat = "time";    // Force.com date serialization uses javascript time value
 							field.type = "date";
 		            	}
 						else if (fieldData[i].fieldType == "double") {
@@ -106,7 +106,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 						} else {
 							field.type = "string";
 						}
-						if (field.name == 'id') {
+						if (field.name == 'Id') {
 							field.persist = false;
 						}
 		            	// TODO add validations (list of valid values, regex, min/max) if possible
@@ -116,10 +116,11 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 		            // TODO add associations to other models
 		            var modelName = Ext.String.capitalize("{!object}");
 		            var extraParams = {sobjname: '{!object}',    // will be sent along with start, limit, etc.
-		           					 	  fields: String('{!fields}').toLowerCase()};
+		           					 	  fields: String('{!fields}')};
 					Ext.define(modelName, {
 						extend: 'Ext.data.Model',
 						fields: extfields,
+						idProperty: 'Id',
 						proxy: {
 							type: 'direct',
 							api: {read:     ExtJSStoreRemotingCtrl.query,

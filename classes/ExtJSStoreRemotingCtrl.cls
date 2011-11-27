@@ -75,10 +75,10 @@ global with sharing class ExtJSStoreRemotingCtrl {
     global class CRUDResponse {
         public Boolean success;
         public String errorMessage;
-        public List<Map<String, String> > records;
+        public List<SObject> records;
         public Integer total;
         CRUDResponse() {
-            records = new List<Map<String, String> >();
+            records = new List<SObject>();
             success = true;
         }
     }
@@ -120,13 +120,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
 	        for (List<SObject> rlit : Database.query(qstr)) {
 	            for (SObject rit : rlit) {
 	                if ((current_result >= qobj.start) && (current_result < (qobj.start + qobj.recordCount))) {
-	                	Map<String, String> objmap = new Map<String, String>();
-	                	for (String field : fieldNames) {
-	                		if (rit.get(field) != null) {
-	                			objmap.put(field, String.valueOf(rit.get(field)));
-	                		}
-	                	}
-	                    resp.records.add(objmap);
+						resp.records.add(rit);
 	                }
 	                current_result++;
 	            }
@@ -162,13 +156,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
         for (List<SObject> rlit : Database.query('SELECT ' + fieldList + ' FROM ' + objName +
         										 ' WHERE Id IN :updatedIds')) {
         	for (SObject rit : rlit) {
-            	Map<String, String> objmap = new Map<String, String>();
-            	for (String field : fieldNames) {
-            		if (rit.get(field) != null) {
-            			objmap.put(field, String.valueOf(rit.get(field)));
-            		}
-            	}
-                resp.records.add(objmap);
+                resp.records.add(rit);
         	}
         }
    		return resp;		
@@ -225,7 +213,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
 		List<Map<String, String> > sobjs = crudData.records;
     	List<String> idlist = new List<String>();
     	for (Map<String, String> sobj : sobjs) {
-    		idlist.add(sobj.get('id'));
+    		idlist.add(sobj.get('Id'));
     	}
     	
     	try {
@@ -267,9 +255,9 @@ global with sharing class ExtJSStoreRemotingCtrl {
     	List<SObject> sobjs = new List<SObject>();
     	for (Map<String, String> recmap : records) {
     		SObject sobj;
-    		if (recmap.containsKey('id')) {
+    		if (recmap.containsKey('Id')) {
       			// create SObject using supplied Id (setting it as a field will fail)
-    			sobj = sobjToken.newSObject(recmap.get('id'));
+    			sobj = sobjToken.newSObject(recmap.get('Id'));
     		} else {
     			sobj = sobjToken.newSObject();
     		}
@@ -279,7 +267,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
 				Boolean emptyValue = (recmap.get(k) == null) || (recmap.get(k) == '') ||
 									  (fieldMap.get(k).getDescribe().getType() != Schema.DisplayType.string) &&
 									  (recmap.get(k) == 'null');
-				if ((k != 'id') &&  // never try to set Id this way (see above)
+				if ((k != 'Id') &&  // never try to set Id this way (see above)
 					((action == 'update') || // don't try to set an empty value unless this is an update
 					 !emptyValue)) {
 					if (emptyValue) {
