@@ -20,11 +20,10 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 	<apex:attribute name="fn" type="String" description="name of a Javascript function to call with ID once a Campaign is selected." required="false" default=""/>
 
 	<!-- load ExtJS -->
-    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.4.0/resources/css/ext-all.css" />
-    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/adapter/ext/ext-base.js"/>
-    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/ext-all.js"/>       
+    <apex:stylesheet value="{!$Resource.ExtJS4}/ext-4.0.7-gpl/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS4}/ext-4.0.7-gpl/ext-all-debug.js"/>       
     <script type="text/javascript">
-    	Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.4.0/resources/images/default/s.gif"
+        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS4}/ext-4.0.7-gpl/resources/themes/images/default/tree/s.gif"
     </script>
 
 	<!-- Create a JS function that calls the child object finding Apex method, -->
@@ -51,8 +50,10 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
        		<apex:repeat value="{!fetchResults}" var="obj">
        			loadData.push({id: "{!obj.id}",
        						   text: "{!obj.name}",
-       						   expanded: {!!obj.hasChildren},
-       						   loaded: {!!obj.hasChildren},
+       						   // in Ext 3.4.0, "loaded and expanded" gave you a leaf icon if there were no children
+       						   // not so in 4.0, but at least we can unshow expansion arrows
+							   loaded: {!!obj.hasChildren},
+                               expandable: {!obj.hasChildren},
        						   leaf: forceLeaf
        						   });
        		</apex:repeat>
@@ -76,62 +77,76 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 
     <script type="text/javascript">
         Ext.onReady(function() {
-        	var tree = new Ext.tree.TreePanel({
-                renderTo: 'treediv',
+    		// BUG WORKAROUND
+    		// DirectProxy gets perfectly fine formatted data from api calls, then discards it
+    		// This may simply be a difference between ExtJS 3 (used by Remoting) and 4...
+    		Ext.data.proxy.Direct.prototype.createRequestCallback =
+    		    function(request, operation, callback, scope){
+        			var me = this;
+        			return function(data, event){
+        				// supply "data" (properly processed data), not "event", as fourth arg
+            			me.processResponse(event.status, operation, request,
+            							   {data: data}, callback, scope);
+        			};
+    			};
+        	
+			var store = Ext.create('Ext.data.TreeStore', {
+                root: {
+                    text: 'All {!object}s',
+                    expandable: true,
+                    allowDrag: false,
+                    id: 'root'              // because you cannot use a blank id (Ext would create one)
+                },
+				proxy: {
+					type: 'direct',
+                	directFn: Ext.apply(function(nodeobj, callback) {
+                		// determine if we are expanding a level 4 record (current limit is 5 -> leaf)
+                		var lvl4 = (store.getNodeById(nodeobj.node).getDepth() >= 4);
+						// establish callback for when AJAX request completes
+                		fetchCallback = Ext.bind(function () {
+                							callback.apply(window, [nodeResults(lvl4), {status: true}]);
+                						}, this);
+                		// call actionFunction created for loading
+                		fetchObjects('{!object}', nodeobj.node);
+                	}, { directCfg: {method: {len: 1}}})   // fake out Direct by supplying this property
+                }
+            });
+				
+
+        	var tree = Ext.create('Ext.tree.Panel', {
+                renderTo: '{!$Component.myTree}',
+                height: 460,
                 useArrows: true,
                 autoScroll: true,
                 animate: true,
                 containerScroll: true,
                 border: false,
-                enableDD: true,
-                loader: new Ext.tree.TreeLoader({
-                	directFn: function(loadid, callback) {
-                		// determine if we are expanding a level 4 record (current limit is 5 -> leaf)
-                		var lvl4 = (tree.getNodeById(loadid).getDepth() >= 4);
-						// establish callback for when AJAX request completes
-                		fetchCallback = function () {
-                							callback.apply(window, [nodeResults(lvl4), {status: true}]);
-                						}.createDelegate(this);
-                		// call actionFunction created for loading
-                		fetchObjects('{!object}', loadid);
-                	}
-                }),
-                root: new Ext.tree.AsyncTreeNode({
-                    text: 'All {!object}s',
-                    expanded: false,
-                    draggable: false,
-                    id: 'root'              // because you cannot use a blank id (Ext would create one)
-                }),
-                listeners: {beforemovenode: function(tree, node, oldParent, newParent) {
-                								if (oldParent.id == newParent.id) {
+		        viewConfig: {
+		            plugins: {
+		                ptype: 'treeviewdragdrop'
+		            }
+		        },
+				store: store,
+                listeners: {beforeitemmove: function(node, oldParent, newParent) {
+                								if (oldParent.getId() == newParent.getId()) {
                 									// just a change to ordering; no need for server request
                 									return true;
                 								}
-												var parent = newParent.id;
+												var parent = newParent.getId();
 												if (parent == 'root') {
 													parent = '';  // translate back into Apex world
 												}
                 								// this is, unfortunately, a synchronous approach
-                								updateParent(parent, node.id);
+                								updateParent(parent, node.getId());
                 								// if level has changed to/from L5, adjust "leaf" property
                 								if ((oldParent.getDepth() == 4) || (newParent.getDepth() == 4)) {
-                									node.leaf = (newParent.getDepth() == 4);
+                									node.set('leaf', (newParent.getDepth() == 4));
                 								}
                 								return true;
                 							},
-                			movenode:		function(tree, node, oldParent, newParent) {
-                								// TreePanel automatically shows nodes without children as leafs
-                								// it will also automatically change those leafs into folders when another
-                								// node is dropped on them.  However, it will not change the folders back
-                								// into leaf icons when the last child is removed.  This is a workaround.
-                								if (!oldParent.hasChildNodes()) {
-                									oldParent.getUI().removeClass("x-tree-node-collapsed");
-                									oldParent.getUI().addClass("x-tree-node-leaf");
-                								}
-                							},
-                			beforedblclick: function(node) {
-     									       if (('{!fn}' != '') && (node.id != 'root')) {
-													{!fn}(node.id);
+                            beforeitemdblclick: function(view, record) {
+     									       if (('{!fn}' != '') && (record.getId() != 'root')) {
+													{!fn}(record.getId());
 												}
 											}}
 
@@ -140,6 +155,6 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
             tree.getRootNode().expand();  // trigger load of top level objects
         });
     </script>
-    <div id="treediv"/>
+    <apex:outputPanel id="myTree" layout="block"/>
 
 </apex:component>
