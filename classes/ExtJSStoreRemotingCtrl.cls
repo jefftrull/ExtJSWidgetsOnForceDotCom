@@ -13,9 +13,9 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
    See the License for the specific language governing permissions and
    limitations under the License.
 */  
-global with sharing class ExtJSStoreRemotingCtrl {
+public with sharing class ExtJSStoreRemotingCtrl {
 	// a class for supplying field property info to the VF component for use in setting up the grid
-    global class FieldInfo {
+    public class FieldInfo {
         public String name;
         public Boolean modifiable;
         public Boolean sortable;
@@ -29,7 +29,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
 
 	// get object metadata and supply to component
    @RemoteAction
-    global static List<FieldInfo>
+    public static List<FieldInfo>
     describeFields(String objName,
                    String fieldList) {
         String[] fieldNames = fieldList.split(',');
@@ -72,7 +72,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
     }
 
     // a user-defined class that will serialize to the JSON expected by the ExtJS DirectProxy api methods
-    global class CRUDResponse {
+    public class CRUDResponse {
         public Boolean success;
         public String errorMessage;
         public List<SObject> records;
@@ -86,18 +86,17 @@ global with sharing class ExtJSStoreRemotingCtrl {
     // Unfortunately JS Remoting member functions must be static, so cannot access non-static class members,
     // which means we cannot cache query results in this controller but must respond to each request anew
 
-	global class QueryObj {
+	public class QueryObj {
 		String sobjname;
 		String fields;
 		Integer start;
 		Integer recordCount;
-		Integer page;         // unused, but supplied by Ext so we cannot omit it
 		List<Map<String, String> > sortParams;
 	}
 
 	// turn grid's page load/sort request into SOQL and return data
 	@RemoteAction
-	global static CRUDResponse query(QueryObj qobj) {
+	public static CRUDResponse query(QueryObj qobj) {
         // construct a query string
         String qstr = 'SELECT ' + qobj.fields + ' FROM ' + qobj.sobjname;
         if (qobj.sortParams != null) {
@@ -136,14 +135,14 @@ global with sharing class ExtJSStoreRemotingCtrl {
 	}
 
 	// C,U,D methods from DirectProxy all have the same argument format:
-	global class CRUDData {
+	public class CRUDData {
 		public String sobjname;
 		public String fields;
 		public List<Map<String, String> > records;
 	}
 
 	// Utility method to refresh newly created/updated objects after the DML operation, for returning to the grid
-	global static CRUDResponse refreshObjects(CRUDData crudData, List<SObject> sobjs) {
+	public static CRUDResponse refreshObjects(CRUDData crudData, List<SObject> sobjs) {
 		CRUDResponse resp = new CRUDResponse();
 
 		String objName = crudData.sobjname;
@@ -165,7 +164,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
 	// Create and Update are very similar.
 	// Create supplies all specified fields but no Id; Update specifies Id and only the fields that changed
     @RemoteAction
-    global static CRUDResponse create(CRUDData crudData) {
+    public static CRUDResponse create(CRUDData crudData) {
 		CRUDResponse resp = new CRUDResponse();
 		List<SObject> sobjs = unpackSobjects('create', crudData, resp);
 		if (!resp.success) {
@@ -187,7 +186,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
     // Ken Thompson is supposed to have said that if he could redo anything about Unix,
     // he'd spell "creat" with an extra "e".  So in that spirit:
     @RemoteAction
-    global static CRUDResponse updat(CRUDData crudData) {
+    public static CRUDResponse updat(CRUDData crudData) {
 		CRUDResponse resp = new CRUDResponse();
 		List<SObject> sobjs = unpackSobjects('update', crudData, resp);
 		if (!resp.success) {
@@ -206,7 +205,7 @@ global with sharing class ExtJSStoreRemotingCtrl {
     }
     
     @RemoteAction
-    global static CRUDResponse delet(CRUDData crudData) {
+    public static CRUDResponse delet(CRUDData crudData) {
 		CRUDResponse resp = new CRUDResponse();
 
 		// produce a list of IDs from each supplied sObject
