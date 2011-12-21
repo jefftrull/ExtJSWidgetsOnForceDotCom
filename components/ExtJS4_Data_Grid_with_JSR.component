@@ -166,7 +166,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         				model: Ext.String.capitalize("{!object}"),
 		                pageSize: pagesize,
         				remoteSort: true,
-        				autoLoad: true,
+        				autoLoad: {!!minimized},
 						// Instead of using store's "autoSync" feature, sync to server on update and remove,
 						// but not add/create, as the initial record will be blank and probably fail validation
         				listeners: {
@@ -243,6 +243,14 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 					    columns: columns,
 					    selModel: {xtype : 'rowmodel',
 					    		   mode : 'MULTI'},
+					    collapsed: {!minimized},
+					    collapsible: true,
+					    listeners: {
+					    	// if we begin minimized, load upon expansion
+					    	expand: function() {
+					    		store.load();
+					    	}
+					    },
 					    // enable editing
 					    plugins: [rowEditing],
 					    // paging toolbar at bottom
