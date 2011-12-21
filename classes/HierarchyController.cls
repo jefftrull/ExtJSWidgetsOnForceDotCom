@@ -42,29 +42,23 @@ public with sharing class HierarchyController {
         // dynamic SOQL so we can change object name
         String querystr = 'select Id, Name from ' + fetchObject + ' where ParentId=\'' + fetchParentId + '\'';
         Map<ID, String> Id2Name = new Map<ID, String>();        // record data as we get it back
-        String fetchedIds = '';
         for (sObject qobj : Database.query(querystr)) {
             Id2Name.put(qobj.id, (String)qobj.get('Name'));
-            String qid = '\'' + qobj.id + '\'';
-            if (fetchedIds == '') {
-                fetchedIds = qid;
-            } else {
-                fetchedIds += (',' + qid);
-            }
         }
         // Do a SOQL query to find which of the records returned in step 1 have children
         // and which are lvl5 (and thus mandatory leaf)
         Set<ID> hasChildRecords = new Set<ID>();
         Set<ID> isLvl5 = new Set<ID>();
-        if (fetchedIds != '') {
+        if (!Id2Name.isEmpty()) {
             // look for records whose "parentId" field matches one of those ids
-            querystr = 'SELECT ParentId FROM ' + fetchObject + ' WHERE ParentId IN (' + fetchedIds + ') GROUP BY ParentId';
+            set<ID> fetchedIds = Id2Name.keySet();
+            querystr = 'SELECT ParentId FROM ' + fetchObject + ' WHERE ParentId IN :fetchedIds GROUP BY ParentId';
             for (AggregateResult pc : Database.query(querystr)) {
                 // AggregateResult values are returned as Objects, requiring casting
                 hasChildRecords.add((ID)pc.get('ParentId'));
             }
             querystr = 'SELECT Id, Parent.Parent.Parent.Parent.Id FROM ' + fetchObject + 
-                           ' WHERE Id IN (' + fetchedIds + ') AND Parent.Parent.Parent.Parent.Id != null';
+                           ' WHERE Id IN :fetchedIds AND Parent.Parent.Parent.Parent.Id != null';
 			for (SObject obj : Database.query(querystr)) {
 				isLvl5.add((ID)obj.get('Id'));
 			}
