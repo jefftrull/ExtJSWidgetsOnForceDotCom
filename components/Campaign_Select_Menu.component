@@ -27,7 +27,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 	<script>
 		Ext.onReady(function() {
 			// Build campaign menu tree from controller data
-            var campMenu = new Ext.menu.Menu({id: 'campMenu'});  
+            var campMenu = Ext.create('Ext.menu.Menu', {id: 'campMenu'});  
             var clickAction = function(n) { {!fn}(n.id.substr(4)); }  // execute supplied callback
             var allowinactive = ("{!allowinactiveselect}" == "true");
                                     
@@ -45,11 +45,11 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                    if ({!NOT(c.isActive)} && !allowinactive) {
                     	// This campaign should be disabled for selection, but still present as a submenu,
                     	// in case it has active children
-                    	parentMenu.addMenuItem({id : ("CAMP" + "{!c.id}"), text : "{!c.name}",
-                    		                    menu : {id : ("MENU" + "{!c.id}")}, cls: 'x-item-disabled'});  // no handler connection
+                    	parentMenu.add({id : ("CAMP" + "{!c.id}"), text : "{!c.name}",
+                    		            menu : {id : ("MENU" + "{!c.id}")}, cls: 'x-item-disabled'});  // no handler connection
                     } else {
-                        parentMenu.addMenuItem({id : ("CAMP" + "{!c.id}"), text : "{!c.name}",
-                    		                    menu : {id : ("MENU" + "{!c.id}")}, handler: clickAction});
+                        parentMenu.add({id : ("CAMP" + "{!c.id}"), text : "{!c.name}",
+                    		            menu : {id : ("MENU" + "{!c.id}")}, handler: clickAction});
                     }
                 }                                                                                                                      
             </apex:repeat>                                                                                                                            

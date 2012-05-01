@@ -22,34 +22,35 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
     <script type="text/javascript">
         Ext.onReady(function(){
             var allowinactive = ("{!allowinactiveselect}" == "true");
-        	var tree = new Ext.tree.TreePanel({
+        	var tree = Ext.create('Ext.tree.Panel', {
                 renderTo: 'treediv',
                 useArrows: true,
                 autoScroll: true,
                 animate: true,
                 containerScroll: true,
                 border: false,
-                root: new Ext.tree.TreeNode({
+				height: 250,
+                root: {
                     text: 'All Campaigns',
                     expanded: true,
                     disabled: true,
                     id: 'camproot'
-                }),
+                },
                 listeners: {
                     // for the treepanel - but apparently not the menu - I can define a single event function for the whole thing
-                    click: function(n) { {!fn}(n.id.substr(4)); }  // execute supplied callback
+                    itemclick: function(view, model, item, index) { {!fn}(model.data.id.substr(4)); }  // execute supplied callback
                 }
             });
             // add the campaigns as tree nodes
             var parentNode;
             <apex:repeat value="{!CampaignTree}" var="c" id="treenodes">
                 // add this Campaign as a menu item
-                parentNode = tree.getNodeById(("{!c.parentid}" == "") ? "camproot" : ("NODE" + "{!c.parentid}"));
-                parentNode.appendChild(new Ext.tree.TreeNode({id : ("NODE" + "{!c.id}"), text : "{!c.name}", leaf : "{!c.isleaf}",
-                                                              // do not allow selecting inactive campaigns
-                                                              disabled : !allowinactive && {!NOT(c.isActive)},
-                                                              // if they are leafs, do not even show them...
-                                                              hidden : !allowinactive && {!AND(c.isLeaf, NOT(c.isActive))}}));
+                parentNode = tree.getStore().getNodeById(("{!c.parentid}" == "") ? "camproot" : ("NODE" + "{!c.parentid}"));
+                parentNode.appendChild({id : ("NODE" + "{!c.id}"), text : "{!c.name}", leaf : "{!c.isleaf}",
+                                        // do not allow selecting inactive campaigns
+                                        disabled : !allowinactive && {!NOT(c.isActive)},
+                                        // if they are leafs, do not even show them...
+                                        hidden : !allowinactive && {!AND(c.isLeaf, NOT(c.isActive))}});
             </apex:repeat>
         });
     </script>
