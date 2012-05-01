@@ -31,8 +31,7 @@ public with sharing class ExtJSStoreRemotingCtrl {
    @RemoteAction
     public static List<FieldInfo>
     describeFields(String objName,
-                   String fieldList) {
-        String[] fieldNames = fieldList.split(',');
+                   List<String> fieldNames) {
         Map<String, Schema.SObjectType> objTypeMap = Schema.getGlobalDescribe();
         if (!objTypeMap.containsKey(objName)) {
         	throw new DescribeException('No SObject named ' + objName + ' found');

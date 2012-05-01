@@ -71,7 +71,8 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         	// use JS Remoting to get field metadata info
         	// TODO check for creatability/updatability of the chosen SObject type by this user
         	// decide whether to use "fieldset" or "fields".  Give "fields" priority (for manual override?)
-        	var fields = '{!fields}';   // comma separated
+        	var fieldlist;
+        	var fields = '{!fields}';
         	if ((fields == null) || (fields == '')) {
         		// try fieldset
         		var fieldset = '{!fieldset}';
@@ -79,9 +80,11 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         			Ext.Msg.alert('neither fields nor fieldsets were supplied to this component');
         			return;
         		}
-        		fields = fieldset.substr(1, fieldset.length - 2);  // remove square brackets
+        		fieldlist = fieldset.substr(1, fieldset.length - 2).split(', ');  // remove square brackets and split
+        	} else {
+        		fieldlist = fields.split(',');
         	}
-        	ExtJSStoreRemotingCtrl.describeFields('{!object}', String('{!fields}'),
+        	ExtJSStoreRemotingCtrl.describeFields('{!object}', fieldlist,
         		function(fieldData, e) {
         			if (!e.status) {
         				Ext.Msg.alert('Server error', e.message);
@@ -89,7 +92,6 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         			}
 					// define a Model using the information returned from the SObject describe call
 		        	var extfields = [];
-		        	var fieldlist = String('{!fields}').split(',');
 		            if (fieldlist.indexOf('Id') == -1) {
 		                extfields.push({
 		                    name: 'Id',
@@ -123,7 +125,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 		            // TODO add associations to other models
 		            var modelName = Ext.String.capitalize("{!object}");
 		            var extraParams = {sobjname: '{!object}',    // will be sent along with start, limit, etc.
-		           					 	  fields: String('{!fields}')};
+		           					 	  fields: fieldlist.join(',')};
 					Ext.define(modelName, {
 						extend: 'Ext.data.Model',
 						fields: extfields,
