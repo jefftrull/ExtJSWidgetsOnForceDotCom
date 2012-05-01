@@ -17,8 +17,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
     <!-- A Visualforce component implementing an ExtJS4 grid backed by JS Remoting from a controller -->
     <!-- Jeff Trull 8/10/2011 -->
     <apex:attribute name="object" type="String" description="sObject to generate a grid for" required="true"/>
-    <apex:attribute name="fields" type="String[]" description="list of fields to display" />
-	<apex:attribute name="fieldset" type="String" description="fieldset to display" />
+    <apex:attribute name="fields" type="String[]" description="list of fields to display" required="true"/>
     <apex:attribute name="minimized" type="Boolean" description="whether to initially render the grid in minimized state" default="false"/>
     <apex:attribute name="rows" type="int" description="how many rows to display in grid" default="19"/>
 
@@ -73,14 +72,13 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         	// decide whether to use "fieldset" or "fields".  Give "fields" priority (for manual override?)
         	var fieldlist;
         	var fields = '{!fields}';
-        	if ((fields == null) || (fields == '')) {
-        		// try fieldset
-        		var fieldset = '{!fieldset}';
-        		if ((fieldset == null) || (fieldset == '') || (fieldset == '[]')) {
-        			Ext.Msg.alert('neither fields nor fieldsets were supplied to this component');
-        			return;
-        		}
-        		fieldlist = fieldset.substr(1, fieldset.length - 2).split(', ');  // remove square brackets and split
+        	if ((fields == null) || (fields == '') || (fields == '[]')) {
+        		Ext.Msg.alert('no fields were supplied to this component');
+        		return;
+        	}
+        	if (fields.substr(0, 1) == '[') {
+        		// a fieldset - remove brackets and split on comma+space
+        		fieldlist = fields.substr(1, fields.length - 2).split(', ');
         	} else {
         		fieldlist = fields.split(',');
         	}
