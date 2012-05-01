@@ -34,21 +34,30 @@ public with sharing class HierarchyController {
     public static List<FetchData> findChildObjects(Request req) {
         String fetchObject = req.sobjname;
         String fetchParentId = req.node;
-        // because we have to determine if each child object has children, we must do two separate queries:
-        // one to get the children of the supplied object ID, the other to count the children of the children
+        // Our goal is to determine the set of children of the supplied node, and also
+        // 1) whether they themselves have children, or
+        // 2) whether they are 5th level (and thus cannot have children added)
+		// I can get the level of the children at the same time as I list them
         if (fetchParentId == 'root') {
             fetchParentId = '';  // workaround because an Ext TreeNode cannot have an empty ID
         }
         // dynamic SOQL so we can change object name
-        String querystr = 'select Id, Name from ' + fetchObject + ' where ParentId=\'' + fetchParentId + '\'';
+        String querystr = 'SELECT Id, Name, Parent.Parent.Parent.Parent.Id, ParentId FROM ' + fetchObject + ' WHERE ParentId=\'' + fetchParentId + '\'';
         Map<ID, String> Id2Name = new Map<ID, String>();        // record data as we get it back
-        for (sObject qobj : Database.query(querystr)) {
+        List<SObject> childObjects = Database.query(querystr);
+        for (sObject qobj : childObjects) {
             Id2Name.put(qobj.id, (String)qobj.get('Name'));
         }
+        Boolean isLvl5 = false;   // children will all be the same level (1 plus their parent's level)
+        if (!childObjects.isEmpty() && 
+        	childObjects[0].getSObject('Parent') != null &&
+        	childObjects[0].getSObject('Parent').getSObject('Parent') != null &&
+        	childObjects[0].getSObject('Parent').getSObject('Parent').getSObject('Parent') != null &&
+        	childObjects[0].getSObject('Parent').getSObject('Parent').getSObject('Parent').get('ParentId') != null) {
+           	isLvl5 = true;
+        }
         // Do a SOQL query to find which of the records returned in step 1 have children
-        // and which are lvl5 (and thus mandatory leaf)
         Set<ID> hasChildRecords = new Set<ID>();
-        Set<ID> isLvl5 = new Set<ID>();
         if (!Id2Name.isEmpty()) {
             // look for records whose "parentId" field matches one of those ids
             set<ID> fetchedIds = Id2Name.keySet();
@@ -57,11 +66,6 @@ public with sharing class HierarchyController {
                 // AggregateResult values are returned as Objects, requiring casting
                 hasChildRecords.add((ID)pc.get('ParentId'));
             }
-            querystr = 'SELECT Id, Parent.Parent.Parent.Parent.Id FROM ' + fetchObject + 
-                           ' WHERE Id IN :fetchedIds AND Parent.Parent.Parent.Parent.Id != null';
-			for (SObject obj : Database.query(querystr)) {
-				isLvl5.add((ID)obj.get('Id'));
-			}
         }
 
         // iterate over original set of campaigns, checking each for children and producing result list
@@ -76,7 +80,7 @@ public with sharing class HierarchyController {
                 fd.expandable = false;
                 fd.loaded = true;
             }
-            fd.leaf = isLvl5.contains(childid);
+            fd.leaf = isLvl5;
             fetchResults.add(fd);
         }
         return fetchResults;
@@ -97,7 +101,6 @@ public with sharing class HierarchyController {
                 System.debug('setParent got exception');
                 return false;
             }
-            System.debug('setParent returning true');
             return true;
         } else {
             return false;
