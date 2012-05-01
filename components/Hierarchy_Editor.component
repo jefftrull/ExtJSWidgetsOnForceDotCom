@@ -26,13 +26,6 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS4}/ext-4.0.7-gpl/resources/themes/images/default/tree/s.gif"
     </script>
 
-
-    <!-- Create a JS function to call the Apex method that reassigns a record parent -->
-    <apex:actionFunction name="updateParent" action="HierarchyController." rerender="setstatuspanel">
-        <apex:param name="parent" assignTo="{!parentIdToSet}" value=""/>
-        <apex:param name="child" assignTo="{!childIdToSet}" value=""/>
-    </apex:actionFunction>
-    
     <script type="text/javascript">
         Ext.onReady(function() {
             // BUG WORKAROUND
