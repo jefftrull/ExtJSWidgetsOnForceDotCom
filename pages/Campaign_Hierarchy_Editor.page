@@ -16,6 +16,14 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 <apex:page standardController="Campaign">
 	<!-- Campaign hierarchy editor using custom VF component based on ExtJS TreePanel widget -->
 	<!-- by Jeff Trull <jetrull@sbcglobal.net> 2010-12-03 -->
+
+    <!-- load ExtJS -->
+    <apex:stylesheet value="{!$Resource.ExtJS4}/ext-4.0.7-gpl/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS4}/ext-4.0.7-gpl/ext-all.js"/>       
+    <script type="text/javascript">
+        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS4}/ext-4.0.7-gpl/resources/themes/images/default/tree/s.gif"
+    </script>
+
 	<apex:form >
 		<apex:pageBlock title="Campaign Hierarchy Editor" tabStyle="Campaign">
 			<c:Hierarchy_Editor object="Campaign" fn="rerender_detail"/>

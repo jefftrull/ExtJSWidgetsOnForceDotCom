@@ -19,14 +19,6 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 	<apex:attribute name="allowinactiveselect" type="Boolean" description="Whether to permit users to select inactive Campaigns" default="false"/>
 	<apex:attribute name="fn" type="String" description="name of a Javascript function to call with ID once a Campaign is selected." required="true"/>
 
-	<!-- load ExtJS -->
-    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.4.0/resources/css/ext-all.css" />
-    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/adapter/ext/ext-base.js"/>
-    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/ext-all.js"/>       
-    <script type="text/javascript">
-    	Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.4.0/resources/images/default/s.gif"
-    </script>
-
     <script type="text/javascript">
         Ext.onReady(function(){
             var allowinactive = ("{!allowinactiveselect}" == "true");

@@ -21,12 +21,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
     <apex:attribute name="minimized" type="Boolean" description="whether to initially render the grid in minimized state" default="false"/>
     <apex:attribute name="rows" type="int" description="how many rows to display in grid" default="19"/>
 
-    <!-- load ExtJS -->
-    <apex:stylesheet value="{!$Resource.ExtJS4}/ext-4.0.7-gpl/resources/css/ext-all.css" />
-    <apex:includeScript value="{!$Resource.ExtJS4}/ext-4.0.7-gpl/ext-all-debug.js"/>       
-    <script type="text/javascript">
-        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS4}/ext-4.0.7-gpl/resources/themes/images/default/tree/s.gif"
-    </script>
+	<!-- Assumes using page loaded ExtJS already -->
 
     <!-- Icons.  Using those included with ExtJS. -->
     <style type="text/css">

@@ -15,6 +15,15 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
  -->
 <apex:page standardController="Opportunity">
 	<!-- A page to test using the campaign menu and campaign tree components -->
+
+	<!-- load ExtJS -->
+    <apex:stylesheet value="{!$Resource.ExtJS}/ext-3.4.0/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/adapter/ext/ext-base.js"/>
+    <apex:includeScript value="{!$Resource.ExtJS}/ext-3.4.0/ext-all.js"/>       
+    <script type="text/javascript">
+    	Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS}/ext-3.4.0/resources/images/default/s.gif"
+    </script>
+
 	<apex:form >
 		<apex:pageBlock title="Selecting Campaigns via Menu Tree" tabStyle="Campaign">
 			<c:Campaign_Select_Menu fn="rerender_detail"/>
