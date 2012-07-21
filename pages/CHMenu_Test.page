@@ -16,11 +16,11 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
 <apex:page standardController="Opportunity">
 	<!-- A page to test using the campaign menu and campaign tree components -->
 
-	<!-- load ExtJS -->
-    <apex:stylesheet value="{!$Resource.ExtJS4}/ext-4.0.7-gpl/resources/css/ext-all.css" />
-    <apex:includeScript value="{!$Resource.ExtJS4}/ext-4.0.7-gpl/ext-all-debug.js"/>       
+    <!-- load ExtJS -->
+    <apex:stylesheet value="{!$Resource.ExtJS4}/extjs-4.1.0/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS4}/extjs-4.1.0/ext-all.js"/>       
     <script type="text/javascript">
-        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS4}/ext-4.0.7-gpl/resources/themes/images/default/tree/s.gif"
+        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS4}/extjs-4.1.0/resources/themes/images/default/tree/s.gif"
     </script>
 
 	<apex:form >

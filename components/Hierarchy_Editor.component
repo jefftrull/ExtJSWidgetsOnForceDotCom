@@ -34,6 +34,10 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                     };
                 };
             
+            // old Direct used by SFDC does not supply getArgs method (expected by 4.1) for Remoting methods
+            HierarchyController.findChildObjects.directCfg.method.getArgs = Ext.direct.RemotingMethod.prototype.getArgs;
+            HierarchyController.setParent.directCfg.method.getArgs = Ext.direct.RemotingMethod.prototype.getArgs;
+                        
             var store = Ext.create('Ext.data.TreeStore', {
                 root: {
                     text: 'All {!object}s',
