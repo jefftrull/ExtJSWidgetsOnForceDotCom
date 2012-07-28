@@ -73,6 +73,22 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
             ExtJSStoreRemotingCtrl.updat.directCfg.method.getArgs = Ext.direct.RemotingMethod.prototype.getArgs;
             ExtJSStoreRemotingCtrl.delet.directCfg.method.getArgs = Ext.direct.RemotingMethod.prototype.getArgs;
                         
+			// Force.com supplies dates as UTC datetime, which ExtJS interprets as a time, so when it displays
+			// the date it is offset by the timezone.  In the US this means it gets displayed as one day too early.
+			// Fix by supplying a custom parse/format function pair to make client dates be midnight on the chosen
+			// date at the client, while the original UTC values are stored on the server.
+			// NOTE supposedly you can also specify a "convert" function when you define the field, but for me that
+			// broke the outbound path (writing to server)
+			Ext.Date.parseFunctions["SFDC"] = function(v) {
+                if ((v == null) || (v == ''))
+                    return null;
+                date_as_sent = new Date(parseInt(v));
+                return new Date(date_as_sent.getUTCFullYear(),
+                  				date_as_sent.getUTCMonth(),
+                  				date_as_sent.getUTCDate());
+			}
+			// not necessary to define a parseFunction here as SFDC seems happy to accept JSON date format
+
             // use JS Remoting to get field metadata info
             // TODO check for creatability/updatability of the chosen SObject type by this user
             // decide whether to use "fieldset" or "fields".  Give "fields" priority (for manual override?)
@@ -105,12 +121,13 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                     }
                     for (var i = 0; i < fieldData.length; i++) {
                         var field = {name: fieldData[i].name, type: fieldData[i].fieldType};
-                        if (fieldData[i].fieldType == "date") {
-                            // having trouble with dates for some reason.  Need to manually specify here.
+                        if (fieldData[i].fieldType == "datetime") {
                             field.dateFormat = "time";    // Force.com date serialization uses javascript time value
                             field.type = "date";
-                        }
-                        else if (fieldData[i].fieldType == "double") {
+                        } else if (fieldData[i].fieldType == "date") {
+                        	field.type = "date";
+                        	field.dateFormat = "SFDC";    // use special format defined above
+                      } else if (fieldData[i].fieldType == "double") {
                             field.type = "float";
                         } else if (fieldData[i].fieldType == "boolean") {
                             field.type = "bool";
@@ -213,8 +230,8 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                             col.xtype = 'booleancolumn';
                             col.trueText = 'Yes';
                             col.falseText = 'No';
-                        } else if (fieldData[i].fieldType == "date") {
-                            col.xtype = 'datecolumn';
+                        } else if ((fieldData[i].fieldType == "date") || (fieldData[i].fieldType == "datetime")) {
+                        	col.xtype = 'datecolumn';
                         }
                         // set up editors for modifiable fields
                         if (fieldData[i].modifiable) {
