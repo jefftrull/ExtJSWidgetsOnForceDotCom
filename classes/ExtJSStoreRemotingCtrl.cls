@@ -96,6 +96,14 @@ public with sharing class ExtJSStoreRemotingCtrl {
 	// turn grid's page load/sort request into SOQL and return data
 	@RemoteAction
 	public static CRUDResponse query(QueryObj qobj) {
+        CRUDResponse resp = new CRUDResponse();
+
+		// construct a count query.  Two SOQL statements - one COUNT(), one with LIMIT -
+		// seems to be faster than one query without LIMIT
+		String countstr = 'SELECT COUNT() FROM ' + qobj.sobjname;
+		countstr = String.escapeSingleQuotes(countstr);
+		resp.total = Database.countQuery(countstr);   // ExtJS grid needs the true total here
+
         // construct a query string
         String qstr = 'SELECT ' + qobj.fields + ' FROM ' + qobj.sobjname;
         if (qobj.sortParams != null) {
@@ -108,10 +116,10 @@ public with sharing class ExtJSStoreRemotingCtrl {
         	// SOQL only supports a single direction, so ignoring others. Probably should return error instead.
         	qstr += ' ' + qobj.sortParams[0].get('direction');
         }
+		Integer reclimit = qobj.start + qobj.recordCount;
+		qstr += ' LIMIT ' + String.valueOf(reclimit);
 		qstr = String.escapeSingleQuotes(qstr);   // sanitize for SOQL injection
-        // no LIMIT here or our "total" numbers will be wrong for the grid
-        // alternatively: do two SOQL calls, one to get the total, one to get requested data
-        CRUDResponse resp = new CRUDResponse();
+
         Integer current_result = 0;
         String[] fieldNames = qobj.fields.split(',');
         try {
@@ -129,7 +137,6 @@ public with sharing class ExtJSStoreRemotingCtrl {
         	resp.errorMessage = e.getMessage();
         	return resp;
         }
-		resp.total = current_result;
         return resp;
 	}
 
