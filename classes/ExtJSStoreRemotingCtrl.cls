@@ -86,11 +86,11 @@ public with sharing class ExtJSStoreRemotingCtrl {
     // which means we cannot cache query results in this controller but must respond to each request anew
 
     public class QueryObj {
-        String sobjname;
-        String fields;
-        Integer start;
-        Integer recordCount;
-        List<Map<String, String> > sortParams;
+        public String sobjname;
+        public String fields;
+        public Integer start;
+        public Integer recordCount;
+        public List<Map<String, String> > sortParams;
     }
 
     // turn grid's page load/sort request into SOQL and return data
@@ -118,15 +118,22 @@ public with sharing class ExtJSStoreRemotingCtrl {
         }
         // data reduction: LIMIT and OFFSET
         // calculate the index of the first record returned by the query
-        // OFFSET only goes up to 2000, so if the first desired record is beyond that point we will have
-        // some records we don't want
-        Integer startrec = Math.min(qobj.start, 2000);
-        // record count to get is the sum of the mandatory unwanted records (those over 2000) and those we want
-        Integer reclimit = (qobj.start - startrec) + qobj.recordCount;
-        qstr += ' LIMIT ' + String.valueOf(reclimit);
-        qstr += ' OFFSET ' + String.valueOf(startrec);
+        // OFFSET has some tricky limitations.  First, the maximum value is 2000, so if the first desired record
+        // is beyond that point we will have to access some records we don't want.  Second, the use of OFFSET
+        // causes the maximum number of records returned to be 200 - this appears to be undocumented.
+		Integer startrec = 0;
+        if (qobj.recordCount > 200) {
+        	// cannot use OFFSET; start at zero and include records before our desired region
+        	Integer reclimit = qobj.start + qobj.recordCount;
+        	qstr += ' LIMIT ' + String.valueOf(reclimit);
+        } else {
+        	startrec = Math.min(qobj.start, 2000);
+        	// record count to get is the sum of the mandatory unwanted records (those over 2000) and those we want
+        	Integer reclimit = (qobj.start - startrec) + qobj.recordCount;
+        	qstr += ' LIMIT ' + String.valueOf(reclimit);
+	        qstr += ' OFFSET ' + String.valueOf(startrec);
+		}
         qstr = String.escapeSingleQuotes(qstr);   // sanitize for SOQL injection
-
         Integer current_result = startrec;        // initialize with the true offset
         String[] fieldNames = qobj.fields.split(',');
         try {
