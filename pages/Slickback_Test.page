@@ -1,3 +1,19 @@
+<!-- 
+Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+ -->
+
 <apex:page >
 <!-- Experiments with SlickGrid and Backbone.js, via SlickBack -->
 <apex:includeScript value="{!URLFOR($Resource.SlickBack, 'vendor/jquery-1.7.1.js')}" />
@@ -7,6 +23,8 @@
 <apex:includeScript value="{!URLFOR($Resource.SlickBack, 'vendor/jquery-ui-1.8.18/jquery-ui-1.8.18.custom.min.js')}" />
 <apex:includeScript value="{!URLFOR($Resource.SlickBack, 'vendor/jquery.event.drag-2.0.js')}" />
 <apex:includeScript value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/slick.core.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/slick.editors.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/slick.formatters.js')}" />
 <apex:includeScript value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/slick.grid.js')}" />
 <apex:includeScript value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/controls/slick.pager.js')}" />
 <!-- and SlickBack depends on Backbone, jQueryUI, and SlickGrid -->
@@ -14,239 +32,10 @@
 
 <apex:styleSheet value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/slick.grid.css')}"/>
 <apex:styleSheet value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/controls/slick.pager.css')}"/>
+<apex:styleSheet value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/examples/examples.css')}"/>
 <apex:styleSheet value="{!URLFOR($Resource.SlickBack, 'vendor/jquery-ui-1.8.18/css/smoothness/jquery-ui-1.8.18.custom.css')}"/>
 
-<!-- contents of example.css -->
-<style type="text/css">
-#exampleGrid {
-  height: 155px;
-  width: 540px;
-  overflow: hidden;
-}
+<c:SlickbackComponent object="Contact" fields="Id,FirstName,LastName,Birthdate,Email,Level__c" rows="18" minimized="true"/>
 
-#examplePager {
-  width: 540px;
-}
-
-.alignRight {
-  text-align: right;
-}
-
-.slick-cell input, .slick-cell select {
-  height: 20px;
-  width: 100%;
-  padding: 0px;
-  margin: 0px;
-  border: 0px;
-}
-
-.slick-cell.alignRight input {
-  text-align: right;
-}
-
-.slick-pager .slick-pager-settings {
-  display: none;
-}
-</style>
-
-<script>
-   // content of model.js:
-   (function() {
-  "use strict";
-
-  function simulateSync(method,model,options) {
-    switch(method) {
-      case 'read':
-        return simulatePaginatedRead(model,options);
-        break;
-      case 'update':
-        return simulatePaginatedUpdate(model,options);
-        break;
-      default:
-        throw "Method " + method + "not implemented";
-        break;
-    }
-  }
-
-  function simulatePaginatedRead(model,options) {
-    var dataParams = options.data || {};
-
-    var page       = dataParams['page']     || 1;
-    var pageSize   = dataParams['per_page'] || 5;
-
-    var offset = ((page - 1) * pageSize);
-
-    var rows = models;
-    var orderBy;
-    if (orderBy = dataParams.order) {
-      rows = _.sortBy(rows, function(p) { return p[orderBy] });
-      if (dataParams.direction === 'DESC') { rows = rows.reverse(); }
-    }
-    rows = rows.slice(offset,(offset + pageSize));
-
-    var data = {
-      entries:      rows,
-      currentPage:  page,
-      perPage:      pageSize,
-      totalEntries: models.length
-    };
-    options.success(data);
-  }
-
-  function simulatePaginatedUpdate(model,options) {
-    var offset = (model.id || 0) - 100;
-    if (offset >= 0) { models[offset] = model.attributes; }
-    options.success();
-  }
-
-  var productModel = Backbone.Model.extend({
-    sync: simulateSync
-  });
-
-  var models = [];
-  _.times(57,function(i) {
-    var model = { 
-      id:    (100 + i),
-      name:  ("Product " + (1 + i)),
-      condition: (Math.floor(Math.random() * 4) + 1),
-      price: ((Math.floor(Math.random()*1001) * 10) + 0.50)
-    };
-    models.push(model);
-  });
-
-  /**
-   * To use a real data source, don't implement sync and
-   * provide the collection with a url which understands 
-   * the pagination and sorting parameters, and which returns
-   * paginated results.
-   */
-  var productsCollection = Slickback.PaginatedCollection.extend({
-    model: productModel,
-    sync:  simulateSync
-  });
-
-  this.Example || (this.Example = {});
-  this.Example.Models = { Product: productModel };
-  this.Example.Collections = { Products: productsCollection };
-
-}).call(this);
-
-  // content of view.js:
-  (function() {
-  "use strict";
-
-  var productColumns = [
-    {
-      id:       'product_id',
-      name:     'Product #',
-      field:    'id',
-      sortable: true,
-      width:    120
-    },
-    {
-      id:       'product_name',
-      name:     'Name',
-      field:    'name',
-      width:    150,
-      editable: true,
-      editor:   Slickback.TextCellEditor
-    },
-    {
-      id:        'product_condition',
-      name:      'Condition',
-      field:     'condition',
-      editable:  true,
-      choices: [
-        { label: 'Excellent', value: 4 },
-        { label: 'Good',      value: 3 },
-        { label: 'Fine',      value: 2 },
-        { label: 'Poor',      value: 1 },
-      ],
-      formatter: Slickback.ChoiceFormatter,
-      editor:    Slickback.DropdownCellEditor,
-      width:     150
-    },
-    {
-      id:       'product_price',
-      name:     'Price',
-      field:    'price',
-      sortable:  true,
-      width:     120,
-      cssClass:  'alignRight',
-      formatter: Slickback.NumberFormatter,
-      precision: 2,
-      separated: true,
-      editable:  true,
-      editor:    Slickback.NumberCellEditor,
-    }
-  ];
-
-  function initializeProductsGridView(initializationOpts) {
-    this.pager  = initializationOpts.pager;
-
-    var gridOptions = _.extend({},{
-      editable:         true,
-      formatterFactory: Slickback.BackboneModelFormatterFactory
-    },initializationOpts.grid);
-
-    var collection = this.collection;
-
-    var grid =
-      new Slick.Grid(this.el,collection,productColumns,gridOptions);
-    var pager =
-      new Slick.Controls.Pager(collection,grid,this.pager);
-
-    grid.onSort.subscribe(function(e, msg) {
-      collection.extendScope({
-        order:     msg.sortCol.field,
-        direction: (msg.sortAsc ? 'ASC' : 'DESC')
-      });
-      collection.fetchWithScope(); // NOTE: resetting pagination
-    });
-
-    collection.bind('change',function(model,attributes) {
-      model.save();
-    });
-
-    collection.onRowCountChanged.subscribe(function() {
-      grid.updateRowCount();
-      grid.render();
-    });
-
-    collection.onRowsChanged.subscribe(function() {
-      grid.invalidateAllRows();
-      grid.render();
-    });
-
-    collection.fetchWithPagination();
-  }
-
-  var productsGridView = Backbone.View.extend({
-    initialize: initializeProductsGridView
-  });
-
-  this.Example || (this.Example = {});
-  this.Example.Views = { ProductsGrid: productsGridView   };
-
-}).call(this);
-  
-j$ = jQuery.noConflict();
-j$(document).ready(function() {
-  // instantiate model and view in DOM
-  j$(function() {
-    var products = new Example.Collections.Products();
-    var view     = new Example.Views.ProductsGrid({
-      el:         '#exampleGrid',
-      collection: products,
-      pager:      j$('#examplePager')
-    });
-  });
-  
-});
-</script>
-SlickBack experiment, here we go
-
-<div id="exampleGrid"></div>
-<div id="examplePager"></div>
 
 </apex:page>

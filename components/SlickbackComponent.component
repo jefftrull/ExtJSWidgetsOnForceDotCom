@@ -1,0 +1,280 @@
+<!-- 
+Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+ -->
+<apex:component >
+	<!-- A SlickTable grid backed by Force.com data via Backbone.js and Slickback.js -->
+    <apex:attribute name="object" type="String" description="sObject to generate a grid for" required="true"/>
+    <apex:attribute name="fields" type="String[]" description="list of fields to display" required="true"/>
+    <apex:attribute name="minimized" type="Boolean" description="whether to initially render the grid in minimized state" default="false"/>
+    <apex:attribute name="rows" type="int" description="how many rows to display in grid" default="19"/>
+
+<!-- contents of example.css -->
+<style type="text/css">
+#topLevel {
+  height: 500px;
+  width: 900px;
+}
+
+#exampleGrid {
+  height: 460px;
+  width: 100%;
+  overflow: hidden;
+}
+
+#examplePager {
+  width: 100%;
+}
+
+.alignRight {
+  text-align: right;
+}
+
+.slick-cell input, .slick-cell select {
+  height: 20px;
+  width: 100%;
+  padding: 0px;
+  margin: 0px;
+  border: 0px;
+}
+
+.slick-cell.alignRight input {
+  text-align: right;
+}
+
+.slick-pager .slick-pager-settings {
+  display: none;
+}
+</style>
+
+<script>
+   // content of model.js:
+   (function() {
+  "use strict";
+
+  function simulateSync(method,model,options) {
+    switch(method) {
+      case 'read':
+        return simulatePaginatedRead(model,options);
+        break;
+      case 'update':
+        return simulatePaginatedUpdate(model,options);
+        break;
+      default:
+        throw "Method " + method + "not implemented";
+        break;
+    }
+  }
+
+  function simulatePaginatedRead(model,options) {
+    var dataParams = options.data || {};
+
+    var page       = dataParams['page']     || 1;
+    var pageSize   = dataParams['per_page'] || 17;
+
+    var offset = ((page - 1) * pageSize);
+
+    var rows = models;
+    var orderBy;
+    if (orderBy = dataParams.order) {
+      rows = _.sortBy(rows, function(p) { return p[orderBy] });
+      if (dataParams.direction === 'DESC') { rows = rows.reverse(); }
+    }
+    rows = rows.slice(offset,(offset + pageSize));
+
+    var data = {
+      entries:      rows,
+      currentPage:  page,
+      perPage:      pageSize,
+      totalEntries: models.length
+    };
+    options.success(data);
+  }
+
+  function simulatePaginatedUpdate(model,options) {
+    var offset = (model.id || 0) - 100;
+    if (offset >= 0) { models[offset] = model.attributes; }
+    options.success();
+  }
+
+  var productModel = Backbone.Model.extend({
+    sync: simulateSync
+  });
+
+  var models = [];
+  _.times(57,function(i) {
+    var model = { 
+      id:    (100 + i),
+      FirstName:  ("First " + (1 + i)),
+      LastName:   ("Last " + (1 + i)),
+      Birthdate: new Date(),
+      Email: 'bozo@test.com',
+      Level__c: 'primary'
+    };
+    models.push(model);
+  });
+
+  /**
+   * To use a real data source, don't implement sync and
+   * provide the collection with a url which understands 
+   * the pagination and sorting parameters, and which returns
+   * paginated results.
+   */
+  var productsCollection = Slickback.PaginatedCollection.extend({
+    model: productModel,
+    sync:  simulateSync
+  });
+
+  this.Example || (this.Example = {});
+  this.Example.Models = { Product: productModel };
+  this.Example.Collections = { Products: productsCollection };
+
+}).call(this);
+
+  // content of view.js:
+  (function() {
+  "use strict";
+
+  var productColumns = [
+    {
+      id:       'contact_id',
+      name:     'ID',
+      field:    'id',
+      sortable: false,
+      width:    120
+    },
+    {
+      id:       'contact_firstname',
+      name:     'First Name',
+      field:    'FirstName',
+      width:    150,
+      editable: true,
+      editor:   Slickback.TextCellEditor
+    },
+    {
+      id:       'contact_lastname',
+      name:     'Last Name',
+      field:    'LastName',
+      width:    150,
+      editable: true,
+      editor:   Slickback.TextCellEditor
+    },
+    {
+      id:        'contact_birthdate',
+      name:      'Birthdate',
+      field:     'Birthdate',
+      editable:  false,   // for now
+      editor:    Slick.Editors.Date,
+      formatter: function(row,cell,value,col,data) {
+        var dateobj = data.get(col.field);
+        return dateobj ? (dateobj.getFullYear() + '-' + dateobj.getMonth() + '-' + dateobj.getDate()) : '';
+      },
+      width:     150
+    },
+    {
+      id:        'contact_email',
+      name:      'Email',
+      field:     'Email',
+      editable:  true,
+      editor:    Slickback.TextCellEditor,
+      width:     150
+    },
+    {
+      id:        'contact_level',
+      name:      'Level',
+      field:     'Level__c',
+      editable:  true,
+      choices: [
+        { label: 'Primary', value: 'primary' },
+        { label: 'Secondary',      value: 'secondary' },
+        { label: 'Tertiary',      value: 'tertiary' }
+      ],
+      formatter: Slickback.ChoiceFormatter,
+      editor:    Slickback.DropdownCellEditor,
+      width:     150
+    }
+  ];
+
+  function initializeProductsGridView(initializationOpts) {
+    this.pager  = initializationOpts.pager;
+
+    var gridOptions = _.extend({},{
+      editable:         true,
+      formatterFactory: Slickback.BackboneModelFormatterFactory
+    },initializationOpts.grid);
+
+    var collection = this.collection;
+
+    var grid =
+      new Slick.Grid(this.el,collection,productColumns,gridOptions);
+    var pager =
+      new Slick.Controls.Pager(collection,grid,this.pager);
+
+    grid.onSort.subscribe(function(e, msg) {
+      collection.extendScope({
+        order:     msg.sortCol.field,
+        direction: (msg.sortAsc ? 'ASC' : 'DESC')
+      });
+      collection.fetchWithScope(); // NOTE: resetting pagination
+    });
+
+    collection.bind('change',function(model,attributes) {
+      model.save();
+    });
+
+    collection.onRowCountChanged.subscribe(function() {
+      grid.updateRowCount();
+      grid.render();
+    });
+
+    collection.onRowsChanged.subscribe(function() {
+      grid.invalidateAllRows();
+      grid.render();
+    });
+
+    collection.fetchWithPagination();
+  }
+
+  var productsGridView = Backbone.View.extend({
+    initialize: initializeProductsGridView
+  });
+
+  this.Example || (this.Example = {});
+  this.Example.Views = { ProductsGrid: productsGridView   };
+
+}).call(this);
+  
+j$ = jQuery.noConflict();
+j$(document).ready(function() {
+  // instantiate model and view in DOM
+  j$(function() {
+    var products = new Example.Collections.Products();
+    var view     = new Example.Views.ProductsGrid({
+      el:         '#exampleGrid',
+      collection: products,
+      pager:      j$('#examplePager')
+    });
+  });
+  
+});
+</script>
+<div id="topLevel">
+	<div class="grid-header" style="width:100%">
+		<label>{!object}</label>
+	</div>
+    <div id="exampleGrid"></div>
+    <div id="examplePager"></div>
+</div>
+
+</apex:component>
