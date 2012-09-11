@@ -13,7 +13,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
    See the License for the specific language governing permissions and
    limitations under the License.
  -->
-<apex:component >
+<apex:component controller="SlickbackRemotingCtrl">
 	<!-- A SlickTable grid backed by Force.com data via Backbone.js and Slickback.js -->
     <apex:attribute name="object" type="String" description="sObject to generate a grid for" required="true"/>
     <apex:attribute name="fields" type="String[]" description="list of fields to display" required="true"/>
@@ -63,6 +63,48 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
    (function() {
   "use strict";
 
+  function read(method, model, options) {
+    var dataParams = options.data || {};
+    SlickbackRemotingCtrl.query(function(fieldData, e) {
+    	if (!e.status) {
+    		options.error(model, fieldData);
+    		return;
+    	}
+	  	// apply paging parameters
+	  	var pageSize = parseInt('{!rows}');     // or let grid supply?
+	  	var page     = dataParams['page'] || 1;
+	  	// reformat inbound dates to what Backbone expects.  Can it do this itself?
+	  	var rows = fieldData.slice((page - 1)*pageSize, page*pageSize);  // slice does not include last
+	  	for (var r in rows) {
+	  		var entry = rows[r];
+	  		if (('Birthdate' in entry) && !!entry.Birthdate) {
+	  			// make it a Date (is a Javascript "time" on the wire!)
+	  			var d = new Date(parseInt(entry.Birthdate));
+	  			entry.Birthdate = new Date(d.getUTCFullYear(),
+                  						   d.getUTCMonth(),
+                  						   d.getUTCDate());
+            }	  			
+	  	}
+	    options.success({ entries: rows,
+	    			      currentPage:  page,
+	    			      perPage:      pageSize,
+	    			      totalEntries: fieldData.length
+	    });
+	});
+  }
+
+  function serverSync(method, model, options) {
+  	switch(method) {
+  		case 'read':
+  			return read(method, model, options);
+  		case 'update':
+  			return simulatePaginatedUpdate(model, options);
+  		default:
+  			throw "Method " + method + "not implemented";
+  			break;
+  	}
+  }
+
   function simulateSync(method,model,options) {
     switch(method) {
       case 'read':
@@ -109,7 +151,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
   }
 
   var productModel = Backbone.Model.extend({
-    sync: simulateSync
+    sync: serverSync
   });
 
   var models = [];
@@ -133,7 +175,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
    */
   var productsCollection = Slickback.PaginatedCollection.extend({
     model: productModel,
-    sync:  simulateSync
+    sync:  serverSync
   });
 
   this.Example || (this.Example = {});
@@ -150,9 +192,9 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
     {
       id:       'contact_id',
       name:     'ID',
-      field:    'id',
+      field:    'Id',
       sortable: false,
-      width:    120
+      width:    150
     },
     {
       id:       'contact_firstname',
@@ -180,7 +222,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
         var dateobj = data.get(col.field);
         return dateobj ? (dateobj.getFullYear() + '-' + dateobj.getMonth() + '-' + dateobj.getDate()) : '';
       },
-      width:     150
+      width:     120
     },
     {
       id:        'contact_email',
@@ -196,13 +238,13 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
       field:     'Level__c',
       editable:  true,
       choices: [
-        { label: 'Primary', value: 'primary' },
-        { label: 'Secondary',      value: 'secondary' },
-        { label: 'Tertiary',      value: 'tertiary' }
+        { label: 'Primary', value: 'Primary' },
+        { label: 'Secondary',      value: 'Secondary' },
+        { label: 'Tertiary',      value: 'Tertiary' }
       ],
       formatter: Slickback.ChoiceFormatter,
       editor:    Slickback.DropdownCellEditor,
-      width:     150
+      width:     120
     }
   ];
 
