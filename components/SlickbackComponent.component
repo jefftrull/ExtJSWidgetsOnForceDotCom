@@ -66,20 +66,27 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
   function read(method, model, options) {
     var dataParams = options.data || {};
   	// apply paging parameters
-  	var pageSize = parseInt('{!rows}');     // or let grid supply?
-  	var page     = dataParams['page'] || 1;
+  	var pageSize    = parseInt('{!rows}');     // or let grid supply?
+  	var page        = dataParams['page'] || 1;
+  	var queryParams = {sobjname:    '{!object}',
+			    	   fields:      '{!fields}',
+			    	   start:       (page - 1)*pageSize,
+			    	   recordCount: pageSize
+    };
+    if (('direction' in dataParams) && (dataParams.direction != null) &&
+        ('order' in dataParams)     && (dataParams.order != null)) {
+        queryParams.sortParams = [{ property:  dataParams.order,
+        							direction: dataParams.direction
+        						  }];
+    }
     SlickbackRemotingCtrl.query(
-    	{sobjname:    '{!object}',
-    	 fields:      '{!fields}',
-    	 start:       (page - 1)*pageSize,
-    	 recordCount: pageSize
-    	},
+    	queryParams,
     	function(resp, e) {
 	    	if (!e.status || !resp.success) {  // TODO latter case is controller-generated; should pass on error message
 	    		options.error(model, resp);
 	    		return;
 	    	}
-		  	// reformat inbound dates to what Backbone expects.  Can it do this itself?
+		  	// transform inbound dates to Date objects Backbone expects.  Can it do this itself?
 		  	for (var r in resp.records) {
 		  		var entry = resp.records[r];
 		  		if (('Birthdate' in entry) && !!entry.Birthdate) {
@@ -108,45 +115,6 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
   			throw "Method " + method + "not implemented";
   			break;
   	}
-  }
-
-  function simulateSync(method,model,options) {
-    switch(method) {
-      case 'read':
-        return simulatePaginatedRead(model,options);
-        break;
-      case 'update':
-        return simulatePaginatedUpdate(model,options);
-        break;
-      default:
-        throw "Method " + method + "not implemented";
-        break;
-    }
-  }
-
-  function simulatePaginatedRead(model,options) {
-    var dataParams = options.data || {};
-
-    var page       = dataParams['page']     || 1;
-    var pageSize   = dataParams['per_page'] || 17;
-
-    var offset = ((page - 1) * pageSize);
-
-    var rows = models;
-    var orderBy;
-    if (orderBy = dataParams.order) {
-      rows = _.sortBy(rows, function(p) { return p[orderBy] });
-      if (dataParams.direction === 'DESC') { rows = rows.reverse(); }
-    }
-    rows = rows.slice(offset,(offset + pageSize));
-
-    var data = {
-      entries:      rows,
-      currentPage:  page,
-      perPage:      pageSize,
-      totalEntries: models.length
-    };
-    options.success(data);
   }
 
   function simulatePaginatedUpdate(model,options) {
@@ -206,6 +174,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
       name:     'First Name',
       field:    'FirstName',
       width:    150,
+      sortable: true,
       editable: true,
       editor:   Slickback.TextCellEditor
     },
@@ -214,6 +183,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
       name:     'Last Name',
       field:    'LastName',
       width:    150,
+      sortable: true,
       editable: true,
       editor:   Slickback.TextCellEditor
     },
@@ -221,6 +191,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
       id:        'contact_birthdate',
       name:      'Birthdate',
       field:     'Birthdate',
+      sortable:   true,
       editable:  false,   // for now
       editor:    Slick.Editors.Date,
       formatter: function(row,cell,value,col,data) {
@@ -234,6 +205,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
       id:        'contact_email',
       name:      'Email',
       field:     'Email',
+      sortable:  true,
       editable:  true,
       editor:    Slickback.TextCellEditor,
       width:     150
