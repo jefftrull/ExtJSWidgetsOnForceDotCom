@@ -1,8 +1,24 @@
+/*
+Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/  
 public with sharing class SlickbackRemotingCtrl {
 	@RemoteAction
-	public static List<Contact>
-	query() {
-		// For now, mindlessly return all contacts and a fixed set of fields
-		return [SELECT Id,FirstName,LastName,Birthdate,Email,Level__c FROM Contact];
+	public static ExtJSStoreRemotingCtrl.CRUDResponse
+	query(ExtJSStoreRemotingCtrl.QueryObj qobj) {
+		// forward request to existing ExtJS controller
+		// TODO: refactor into separate class
+		return ExtJSStoreRemotingCtrl.query(qobj);
 	}
 }

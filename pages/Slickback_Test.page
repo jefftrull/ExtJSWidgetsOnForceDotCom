@@ -35,7 +35,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
 <apex:styleSheet value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/examples/examples.css')}"/>
 <apex:styleSheet value="{!URLFOR($Resource.SlickBack, 'vendor/jquery-ui-1.8.18/css/smoothness/jquery-ui-1.8.18.custom.css')}"/>
 
-<c:SlickbackComponent object="Contact" fields="Id,FirstName,LastName,Birthdate,Email,Level__c" rows="18" minimized="true"/>
+<c:SlickbackComponent object="Contact" fields="Id,FirstName,LastName,Birthdate,Email,Level__c" rows="17" minimized="true"/>
 
 
 </apex:page>

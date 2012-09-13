@@ -65,32 +65,37 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
 
   function read(method, model, options) {
     var dataParams = options.data || {};
-    SlickbackRemotingCtrl.query(function(fieldData, e) {
-    	if (!e.status) {
-    		options.error(model, fieldData);
-    		return;
-    	}
-	  	// apply paging parameters
-	  	var pageSize = parseInt('{!rows}');     // or let grid supply?
-	  	var page     = dataParams['page'] || 1;
-	  	// reformat inbound dates to what Backbone expects.  Can it do this itself?
-	  	var rows = fieldData.slice((page - 1)*pageSize, page*pageSize);  // slice does not include last
-	  	for (var r in rows) {
-	  		var entry = rows[r];
-	  		if (('Birthdate' in entry) && !!entry.Birthdate) {
-	  			// make it a Date (is a Javascript "time" on the wire!)
-	  			var d = new Date(parseInt(entry.Birthdate));
-	  			entry.Birthdate = new Date(d.getUTCFullYear(),
-                  						   d.getUTCMonth(),
-                  						   d.getUTCDate());
-            }	  			
-	  	}
-	    options.success({ entries: rows,
-	    			      currentPage:  page,
-	    			      perPage:      pageSize,
-	    			      totalEntries: fieldData.length
-	    });
-	});
+  	// apply paging parameters
+  	var pageSize = parseInt('{!rows}');     // or let grid supply?
+  	var page     = dataParams['page'] || 1;
+    SlickbackRemotingCtrl.query(
+    	{sobjname:    '{!object}',
+    	 fields:      '{!fields}',
+    	 start:       (page - 1)*pageSize,
+    	 recordCount: pageSize
+    	},
+    	function(resp, e) {
+	    	if (!e.status || !resp.success) {  // TODO latter case is controller-generated; should pass on error message
+	    		options.error(model, resp);
+	    		return;
+	    	}
+		  	// reformat inbound dates to what Backbone expects.  Can it do this itself?
+		  	for (var r in resp.records) {
+		  		var entry = resp.records[r];
+		  		if (('Birthdate' in entry) && !!entry.Birthdate) {
+		  			// make it a Date (is a Javascript "time" on the wire!)
+		  			var d = new Date(parseInt(entry.Birthdate));
+		  			entry.Birthdate = new Date(d.getUTCFullYear(),
+	                  						   d.getUTCMonth(),
+	                  						   d.getUTCDate());
+	            }	  			
+		  	}
+		    options.success({ entries: resp.records,
+		    			      currentPage:  page,
+		    			      perPage:      pageSize,
+		    			      totalEntries: resp.total
+		    });
+		});
   }
 
   function serverSync(method, model, options) {
@@ -220,7 +225,8 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
       editor:    Slick.Editors.Date,
       formatter: function(row,cell,value,col,data) {
         var dateobj = data.get(col.field);
-        return dateobj ? (dateobj.getFullYear() + '-' + dateobj.getMonth() + '-' + dateobj.getDate()) : '';
+        // Let jQuery-UI do the formatting for us:
+        return dateobj ? j$.datepicker.formatDate('mm/dd/yy', dateobj) : '';
       },
       width:     120
     },
