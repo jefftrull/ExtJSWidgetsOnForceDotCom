@@ -14,6 +14,10 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
    limitations under the License.
 */  
 public with sharing class SlickbackRemotingCtrl {
+	// for now, we simply forward these calls to the methods worked out previously for ExtJS
+	// having this indirection gives us the ability to alter return types on the fly, provide
+	// additional methods, etc. that work better for Slickback.
+
 	@RemoteAction
 	public static ExtJSStoreRemotingCtrl.CRUDResponse
 	query(ExtJSStoreRemotingCtrl.QueryObj qobj) {
@@ -21,4 +25,12 @@ public with sharing class SlickbackRemotingCtrl {
 		// TODO: refactor into separate class
 		return ExtJSStoreRemotingCtrl.query(qobj);
 	}
+
+	@RemoteAction
+    public static List<ExtJSStoreRemotingCtrl.FieldInfo>
+    describeFields(String objName,
+                   List<String> fieldNames) {
+    	// forward
+    	return ExtJSStoreRemotingCtrl.describeFields(objName, fieldNames);	
+    }
 }

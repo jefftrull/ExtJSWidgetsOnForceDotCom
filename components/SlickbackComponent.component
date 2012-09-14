@@ -156,137 +156,133 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
   this.Example.Collections = { Products: productsCollection };
 
 }).call(this);
-
-  // content of view.js:
-  (function() {
-  "use strict";
-
-  var productColumns = [
-    {
-      id:       'contact_id',
-      name:     'ID',
-      field:    'Id',
-      sortable: false,
-      width:    150
-    },
-    {
-      id:       'contact_firstname',
-      name:     'First Name',
-      field:    'FirstName',
-      width:    150,
-      sortable: true,
-      editable: true,
-      editor:   Slickback.TextCellEditor
-    },
-    {
-      id:       'contact_lastname',
-      name:     'Last Name',
-      field:    'LastName',
-      width:    150,
-      sortable: true,
-      editable: true,
-      editor:   Slickback.TextCellEditor
-    },
-    {
-      id:        'contact_birthdate',
-      name:      'Birthdate',
-      field:     'Birthdate',
-      sortable:   true,
-      editable:  false,   // for now
-      editor:    Slick.Editors.Date,
-      formatter: function(row,cell,value,col,data) {
-        var dateobj = data.get(col.field);
-        // Let jQuery-UI do the formatting for us:
-        return dateobj ? j$.datepicker.formatDate('mm/dd/yy', dateobj) : '';
-      },
-      width:     120
-    },
-    {
-      id:        'contact_email',
-      name:      'Email',
-      field:     'Email',
-      sortable:  true,
-      editable:  true,
-      editor:    Slickback.TextCellEditor,
-      width:     150
-    },
-    {
-      id:        'contact_level',
-      name:      'Level',
-      field:     'Level__c',
-      editable:  true,
-      choices: [
-        { label: 'Primary', value: 'Primary' },
-        { label: 'Secondary',      value: 'Secondary' },
-        { label: 'Tertiary',      value: 'Tertiary' }
-      ],
-      formatter: Slickback.ChoiceFormatter,
-      editor:    Slickback.DropdownCellEditor,
-      width:     120
-    }
-  ];
-
-  function initializeProductsGridView(initializationOpts) {
-    this.pager  = initializationOpts.pager;
-
-    var gridOptions = _.extend({},{
-      editable:         true,
-      formatterFactory: Slickback.BackboneModelFormatterFactory
-    },initializationOpts.grid);
-
-    var collection = this.collection;
-
-    var grid =
-      new Slick.Grid(this.el,collection,productColumns,gridOptions);
-    var pager =
-      new Slick.Controls.Pager(collection,grid,this.pager);
-
-    grid.onSort.subscribe(function(e, msg) {
-      collection.extendScope({
-        order:     msg.sortCol.field,
-        direction: (msg.sortAsc ? 'ASC' : 'DESC')
-      });
-      collection.fetchWithScope(); // NOTE: resetting pagination
-    });
-
-    collection.bind('change',function(model,attributes) {
-      model.save();
-    });
-
-    collection.onRowCountChanged.subscribe(function() {
-      grid.updateRowCount();
-      grid.render();
-    });
-
-    collection.onRowsChanged.subscribe(function() {
-      grid.invalidateAllRows();
-      grid.render();
-    });
-
-    collection.fetchWithPagination();
-  }
-
-  var productsGridView = Backbone.View.extend({
-    initialize: initializeProductsGridView
-  });
-
-  this.Example || (this.Example = {});
-  this.Example.Views = { ProductsGrid: productsGridView   };
-
-}).call(this);
   
 j$ = jQuery.noConflict();
 j$(document).ready(function() {
   // instantiate model and view in DOM
   j$(function() {
-    var products = new Example.Collections.Products();
-    var view     = new Example.Views.ProductsGrid({
-      el:         '#exampleGrid',
-      collection: products,
-      pager:      j$('#examplePager')
-    });
-  });
-  
+	// construct columns from field metadata
+    // decide whether to use "fieldset" or "fields".  Give "fields" priority (for manual override?)
+    var fieldlist;
+    var fields = '{!fields}';
+    if ((fields == null) || (fields == '') || (fields == '[]')) {
+        Ext.Msg.alert('no fields were supplied to this component');
+        return;
+    }
+    if (fields.substr(0, 1) == '[') {
+        // a fieldset - remove brackets and split on comma+space
+        fieldlist = fields.substr(1, fields.length - 2).split(', ');
+    } else {
+        fieldlist = fields.split(',');
+    }
+    SlickbackRemotingCtrl.describeFields('{!object}', fieldlist,
+        function(fieldData, e) {
+            if (!e.status) {
+            	throw 'Server error ' + e.message;   // TODO use modal dialog instead
+            }
+            var columns = [];
+            for (var i = 0; i < fieldData.length; i++) {
+                var col = {
+                    id: fieldData[i].name,
+                    field: fieldData[i].name,
+                    name: fieldData[i].label,
+                    sortable: fieldData[i].sortable,
+                    width: 150
+                }
+                // special treatment for some data types
+                if ((fieldData[i].fieldType == "date") || (fieldData[i].fieldType == "datetime")) {
+                	col.formatter = function(row,cell,value,col,data) {
+        				var dateobj = data.get(col.field);
+        				// Let jQuery-UI do the formatting for us:
+        				return dateobj ? j$.datepicker.formatDate('mm/dd/yy', dateobj) : '';
+      				}
+      			} else if (fieldData[i].fieldType == "picklist") {
+      				col.formatter = Slickback.ChoiceFormatter;
+      			}
+                // set up editors for modifiable fields
+                if (fieldData[i].modifiable) {
+                	col.editable = true;
+                	// special editors for certain data types
+                	if (fieldData[i].fieldType == "double") {
+                		col.editor = Slickback.NumberCellEditor;
+                	} else if (fieldData[i].fieldType == "integer") {
+                		col.editor = Slickback.IntegerCellEditor;
+                	} else if (fieldData[i].fieldType == "date") {
+                		col.editor = Slick.Editors.Date;  // unclear if this actually works...
+                	} else if (fieldData[i].fieldType == "picklist") {
+                		col.editor = Slickback.DropdownCellEditor;
+                		// add choice values
+                		col.choices = [];
+                		for (var j=0; j< fieldData[i].picklistValues.length; j++) {
+                			if (fieldData[i].picklistValues[j].length > 1) {  // skip nillable values
+                				col.choices.push({ label: fieldData[i].picklistValues[j][0],
+                							   	   value: fieldData[i].picklistValues[j][1]
+                							     });
+                			}
+                		}
+                	} else {
+                		col.editor = Slickback.TextCellEditor;
+                	}
+                }
+                columns.push(col);
+              }
+              console.log('columns are:', columns); 		
+
+			  function initializeProductsGridView(initializationOpts) {
+			    this.pager  = initializationOpts.pager;
+			
+			    var gridOptions = _.extend({},{
+			        editable:         true,
+			        formatterFactory: Slickback.BackboneModelFormatterFactory
+			    },initializationOpts.grid);
+			
+			    var collection = this.collection;
+			
+			    var grid =
+			      new Slick.Grid(this.el,collection,columns,gridOptions);
+			    var pager =
+			      new Slick.Controls.Pager(collection,grid,this.pager);
+			
+			    grid.onSort.subscribe(function(e, msg) {
+			        collection.extendScope({
+			            order:     msg.sortCol.field,
+			            direction: (msg.sortAsc ? 'ASC' : 'DESC')
+			        });
+			        collection.fetchWithScope(); // NOTE: resetting pagination
+			    });
+			
+			    collection.bind('change',function(model,attributes) {
+			        model.save();
+			    });
+			
+			    collection.onRowCountChanged.subscribe(function() {
+			        grid.updateRowCount();
+			        grid.render();
+			    });
+			
+			    collection.onRowsChanged.subscribe(function() {
+			        grid.invalidateAllRows();
+			        grid.render();
+			    });
+			
+			    collection.fetchWithPagination();
+			  }
+			
+			  var productsGridView = Backbone.View.extend({
+			      initialize: initializeProductsGridView
+			  });
+			
+			  this.Example || (this.Example = {});
+			  this.Example.Views = { ProductsGrid: productsGridView   };
+
+		      var products = new Example.Collections.Products();
+		      var view     = new Example.Views.ProductsGrid({
+		        el:         '#exampleGrid',
+		        collection: products,
+		        pager:      j$('#examplePager')
+		      });
+          });
+      });
 });
 </script>
 <div id="topLevel">
