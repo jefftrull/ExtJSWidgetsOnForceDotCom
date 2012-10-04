@@ -1,0 +1,219 @@
+<!-- 
+Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+ -->
+<apex:component controller="ExtJSStoreRemotingCtrl" >
+<!-- A SlickTable grid backed by Force.com data via Recline.js -->
+<apex:attribute name="object" type="String" description="sObject to generate a grid for" required="true"/>
+<apex:attribute name="fields" type="String[]" description="list of fields to display" required="true"/>
+<apex:attribute name="minimized" type="Boolean" description="whether to initially render the grid in minimized state" default="false"/>
+<apex:attribute name="rows" type="int" description="how many rows to display in grid" default="19"/>
+
+<script>
+// Implement a Recline.Backend on top of our remoted CRUD methods
+// Following the pattern in the Recline backend examples
+this.recline = this.recline || {};
+this.recline.Backend = this.recline.Backend || {};
+this.recline.Backend.SFDC = this.recline.Backend.SFDC || {};
+
+// IIFE module to hide from global namespace
+(function(j$, my) {
+'use strict';
+
+// local private data and methods
+var sobjname = '{!object}';
+
+var fields = '{!fields}';
+if ((fields === null) || (fields === '') || (fields === '[]')) {
+    alert('no fields were supplied to this component');  // BOZO use jQueryUI
+    return;
+}
+var fieldlist;
+if (fields.substr(0, 1) == '[') {
+    // a fieldset - remove brackets and split on comma+space
+    fieldlist = fields.substr(1, fields.length - 2).split(', ');
+} else {
+    fieldlist = fields.split(',');
+}
+
+var fieldData;   // storage for results of describeFields
+
+// get field metadata.
+// Returns array of Recline Fields wrapped in a jQ promise users can wait on
+// directly, or chain with other operations.
+function getFieldData(obj, fields) {
+	console.log('getfielddata: called with obj=', obj, ' fields=', fields);
+    if ((fields == null) || (fields == '') || (fields == '[]')) {
+        alert('no fields were supplied to this component');  // BOZO use appropriate jQ UI element
+        return;
+    }
+	var dfd = j$.Deferred();
+	ExtJSStoreRemotingCtrl.describeFields(
+		obj, fieldlist,
+		function(result, e) {
+			if (!e.status) {
+				dfd.reject();  // pass on error info somehow?
+				return;
+			}
+			fieldData = result;   // cache results for other uses (e.g., grid column definition)
+			// format field data the way Recline likes to see it
+			var fields = [];
+			for (var idx = 0; idx < fieldData.length; ++idx) {
+				var field = {
+					id: fieldData[idx].name,
+					label: fieldData[idx].label,
+					type: 'string'  // default
+				};
+				if (j$.inArray(fieldData[idx].fieldType,
+							   ["integer", "double", "boolean", "date"])) {
+					// types with an exact equivalent in Recline
+					field.type = fieldData[idx].fieldType;
+				}
+				// supply special formatters where appropriate
+				// documentation states renderer is a property of "field" but in fact only "options" (2nd ctor arg) works
+				var options = {};
+				if (fieldData[idx].fieldType === "date") {
+					options.renderer = function(dateobj) {
+						return dateobj ? j$.datepicker.formatDate('mm/dd/yy', dateobj) : '';
+					}
+				}
+				fields.push(new recline.Model.Field(field, options));
+			}
+			dfd.resolve(fields);
+		});
+	return dfd.promise();
+} // end getFieldData
+
+// required public data members and methods for a recline Backend
+my.__type__ = 'sfdc';
+
+my.fetch = function(dataset) {
+	console.log('fetch: got dataset=', dataset);
+	
+	// we've got two asynchronous accesses to chain:
+	// 1) fetch field metadata and store in "this" object
+	// 2) get initial data set
+	// jQ promises can help us manage the sequencing
+	var fdprm = getFieldData('{!object}', '{!fields}');   // returns "promise" we can use for sequencing
+	// create initial query object (Recline.backend style)
+	var qobj = {size:     parseInt('{!rows}'),
+				from:     0,
+				fields:   '{!fields}'
+			   };
+	// when the fieldData request gets done, launch a query.  When that gets done, post-process
+	// the query results.  Return a single promise representing the chain of three actions:
+	var result = {};
+	return fdprm.pipe(function(fieldData) {
+		// combine fieldData with query results to become a "fetch" result as expected by Recline
+		result.fields = fieldData;
+		return my.query(qobj, dataset, fieldData);                     // chain to query
+	}).pipe(function(queryResult) {
+		result.records = queryResult.hits;
+		return j$.Deferred().resolve(result);
+	});
+} // end fetch method
+
+
+my.query = function(qobj, dataset) {
+	var dfd = j$.Deferred();
+	var ctrlqobj = {sobjname:    sobjname,
+					recordCount: qobj.size,
+					start:       qobj.from,
+					fields:      fieldlist.join(",")   // method expects string, not list
+				   };
+	if (('sort' in qobj) && (qobj.sort.length > 0)) {
+		// apply first sort parameter to query
+		ctrlqobj.sortParams = [];
+		for (var k in qobj.sort[0]) {
+			ctrlqobj.sortParams.push({property: k,
+									  direction: (qobj.sort[0][k].order === 'asc') ? 'ASC' : 'DESC'
+									 });
+		}
+	}
+		
+	ExtJSStoreRemotingCtrl.query(
+		ctrlqobj,
+		function(resp, e) {
+			if (!e.status) {
+				dfd.reject();   // holder of promise unblocked with failure result
+				// TODO hook in some sensible error handling in GUI
+				return;
+			}
+			// post-process response as needed
+			for (var fieldno = 0; fieldno < fieldData.length; ++fieldno) {
+				if (fieldData[fieldno].fieldType == "date") {
+					// manually construct Date objects from "Unix time"
+					// Recline is supposed to handle this but it doesn't seem to work
+					for (var recno = 0; recno < resp.records.length; ++recno) {
+						var date_data = resp.records[recno][fieldData[fieldno].name];
+						if ((date_data === undefined) || (date_data === null) || (date_data === '')) {
+							continue;
+						}
+						var d = new Date(parseInt(date_data));
+						resp.records[recno][fieldData[fieldno].name] =
+							new Date(d.getUTCFullYear(),
+	                  				 d.getUTCMonth(),
+	                  				 d.getUTCDate());
+					}
+				}
+			}
+			dfd.resolve({ total: parseInt(resp.total),
+						  hits:  resp.records });
+		});
+	return dfd.promise();
+} // end query
+
+// column width definitions... Recline puts most of the appearance stuff into the Model (!)
+// but not column widths, in the current implementation.  Instead the user must supply a "state":
+my.getState = function() {
+	var state = {};
+	state.columnsWidth = [];
+    for (var i = 0; i < fieldData.length; i++) {
+    	state.columnsWidth.push({column: fieldData[i].name,
+    							 width:  150});
+    }
+    return state;
+}
+
+// It also appears that the Slickgrid view in Recline does not support editing, although the regular "grid" view does.
+// Also all columns are assumed to be sortable...
+
+}(jQuery, recline.Backend.SFDC));
+
+
+j$ = jQuery.noConflict();
+j$(document).ready(function() {
+	'use strict';
+
+	// get initial data
+	var dataset = new recline.Model.Dataset({
+		backend: 'sfdc'
+	});
+
+	dataset.fetch().done(function(data) {
+
+		var grid = new recline.View.SlickGrid({
+			model:   dataset,
+			state:   dataset.backend.getState(),
+			el:      j$('#myGrid')     // render grid into element below
+		});
+
+		grid.visible = true;
+		grid.render();
+	});
+});
+</script>
+<div id="myGrid" style="height: 400px; width: 100%">
+</div>
+</apex:component>

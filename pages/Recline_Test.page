@@ -1,0 +1,37 @@
+<!-- 
+Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+ -->
+<apex:page showHeader="false">
+<!-- Experimenting with Recline.js as a glue layer for SlickGrid (and other views) and Backbone.js -->
+
+<!-- Style stuff.  Some of these may be optional: -->
+<apex:styleSheet value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/vendor/bootstrap/2.0.2/css/bootstrap.css')}" />
+<apex:styleSheet value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/vendor/slickgrid/2.0.1/slick.grid.css')}" />
+<apex:styleSheet value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/css/slickgrid.css')}" />
+
+<!-- Script dependencies.  These are all from the 0.5 release of Recline: -->
+<apex:includeScript value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/vendor/jquery/1.7.1/jquery.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/vendor/underscore/1.1.6/underscore.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/vendor/backbone/0.5.1/backbone.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/vendor/bootstrap/2.0.2/bootstrap.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/vendor/slickgrid/2.0.1/jquery-ui-1.8.16.custom.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/vendor/slickgrid/2.0.1/jquery.event.drag-2.0.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/vendor/slickgrid/2.0.1/slick.grid.min.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/src/model.js')}" />
+<apex:includeScript value="{!URLFOR($Resource.Recline, 'okfn-recline-b48b0ee/src/view.slickgrid.js')}" />
+
+<c:SlickRecline object="Contact" fields="Id,FirstName,LastName,Birthdate,Email,Level__c" rows="17" minimized="true"/>
+
+</apex:page>
