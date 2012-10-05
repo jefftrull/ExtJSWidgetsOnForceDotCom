@@ -86,17 +86,6 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
 	    		options.error(model, resp);
 	    		return;
 	    	}
-		  	// transform inbound dates to Date objects Backbone expects.  Can it do this itself?
-		  	for (var r in resp.records) {
-		  		var entry = resp.records[r];
-		  		if (('Birthdate' in entry) && !!entry.Birthdate) {
-		  			// make it a Date (is a Javascript "time" on the wire!)
-		  			var d = new Date(parseInt(entry.Birthdate));
-		  			entry.Birthdate = new Date(d.getUTCFullYear(),
-	                  						   d.getUTCMonth(),
-	                  						   d.getUTCDate());
-	            }	  			
-		  	}
 		    options.success({ entries: resp.records,
 		    			      currentPage:  page,
 		    			      perPage:      pageSize,
@@ -124,7 +113,20 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
   }
 
   var productModel = Backbone.Model.extend({
-    sync: serverSync
+    sync: serverSync,
+    parse: function(response) {
+    	// here is where we perform any translations between data returned from the
+    	// server and what we want to store in each model
+		// for now, just handle a (hardcoded) date field:
+  		if (('Birthdate' in response) && !!response.Birthdate) {
+  			// make it a Date (is a Javascript "time" on the wire!)
+  			var d = new Date(parseInt(response.Birthdate));
+  			response.Birthdate = new Date(d.getUTCFullYear(),
+                 						   d.getUTCMonth(),
+                 						   d.getUTCDate());
+        }	  			
+    	return response;
+    }
   });
 
   var models = [];
@@ -159,8 +161,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
   
 j$ = jQuery.noConflict();
 j$(document).ready(function() {
-  // instantiate model and view in DOM
-  j$(function() {
+    // instantiate model and view in DOM
 	// construct columns from field metadata
     // decide whether to use "fieldset" or "fields".  Give "fields" priority (for manual override?)
     var fieldlist;
@@ -226,7 +227,6 @@ j$(document).ready(function() {
                 }
                 columns.push(col);
               }
-              console.log('columns are:', columns); 		
 
 			  function initializeProductsGridView(initializationOpts) {
 			    this.pager  = initializationOpts.pager;
@@ -282,7 +282,6 @@ j$(document).ready(function() {
 		        pager:      j$('#examplePager')
 		      });
           });
-      });
 });
 </script>
 <div id="topLevel">
