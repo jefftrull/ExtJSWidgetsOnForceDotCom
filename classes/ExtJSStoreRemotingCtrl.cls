@@ -249,6 +249,14 @@ public with sharing class ExtJSStoreRemotingCtrl {
     
     // create, update, and delete all supply things that resemble SObjects
     // (although update only has changed fields and delete only has IDs)
+
+	// this method may seem a bit redundant when Remoting can now accept SObjects.  There are two important
+	// things we do here that can't be done just by accepting List<sObject> in our methods:
+	// 1) a generic sObject (not created from a describe "token") and without an Id cannot be used in DML,
+	//    so we have to generate a new sObject anyway for "create" operations
+	// 2) There is something funny about Date fields - I haven't been able to find a format
+	//    that the server will accept.  A plain Date parameter can be supplied via UTC string, but
+	//    one that is a field inside an SObject gives problems.  Converting from a string works fine though.
     static List<SObject> unpackSobjects(String action, CRUDData crudData, CRUDResponse resp) {
         resp.success = false;
 
