@@ -27,6 +27,12 @@ public with sharing class SlickbackRemotingCtrl {
 	}
 
 	@RemoteAction
+	public static ExtJSStoreRemotingCtrl.CRUDResponse
+	updat(ExtJSStoreRemotingCtrl.CRUDData dat) {
+		return ExtJSStoreRemotingCtrl.updat(dat);
+	}
+
+	@RemoteAction
     public static List<ExtJSStoreRemotingCtrl.FieldInfo>
     describeFields(String objName,
                    List<String> fieldNames) {
