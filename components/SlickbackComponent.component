@@ -150,8 +150,7 @@ var SFDC_Connector = function(sobjname, fields) {
     // initialization code
     var fieldlist;
     if ((fields == null) || (fields == '') || (fields == '[]')) {
-        alert('no fields were supplied to this component');   // BOZO or suitable jQ UI widget
-        return;
+    	throw "Grid Component Error: no fields supplied";
     }
     if (fields.substr(0, 1) == '[') {
         // a fieldset - remove brackets and split on comma+space
@@ -164,7 +163,18 @@ var SFDC_Connector = function(sobjname, fields) {
         function(response, e) {
             if (!e.status) {
                 fieldData.reject();                  // cause anyone waiting to fail
-                throw 'Server error ' + e.message;   // TODO use modal dialog instead
+                j$("#gridErrs").dialog(
+                    {height: 100,
+                     resizable: false,
+                     modal: true,
+                     title: "Server Error",
+                     buttons:
+                         {"OK" : function() {
+                                     j$( this ).dialog("close");
+                                 }
+                         }
+                    }).text(e.message);
+                return;
             }
             fieldData.resolve(response);             // cause waiters to succeed with data
         });
@@ -308,6 +318,7 @@ j$(document).ready(function() {
                     {height: 100,
                      resizable: false,
                      modal: true,
+                     title: "Validation Error",
                      buttons:
                          { "OK" : function() {
                                      // ensure focus remains in edit cell
@@ -345,7 +356,7 @@ j$(document).ready(function() {
         <label>{!object}</label>
     </div>
     <div id="exampleGrid"></div>
-    <div id="gridErrs" title="Validation Error"></div>
+    <div id="gridErrs"></div>
     <div id="examplePager"></div>
 </div>
 
