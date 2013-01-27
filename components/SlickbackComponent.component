@@ -245,6 +245,15 @@ var columnsPromise = sfdc.getFieldDataPromise().pipe(
                 } else {
                     col.editor = Slickback.TextCellEditor;
                 }
+                if ((col.editor == Slickback.TextCellEditor) &&
+                	(fieldData[i].nillable == false)) {
+                	// add non-blank validation to field
+                	col.validator = function(val) {
+                		return ( _.isString(val) && val !== "")
+                			 ? { valid: true, msg: null }
+                			 : { valid: false, msg: "Please supply a value for this field" };
+                	}
+                }
             }
             columns.push(col);
         }
@@ -294,6 +303,27 @@ j$(document).ready(function() {
                 grid.render();
             });
         
+			// arrange for error reporting
+		    grid.onValidationError.subscribe(function (e, args) {
+		    	j$("#gridErrs").dialog(
+		    		{height: 100,
+		    		 resizable: false,
+		    		 modal: true,
+		    		 buttons:
+		    		 	{ "OK" : function() {
+		    		 				// ensure focus remains in edit cell
+		    		 				args.editor.focus();
+		    		 				j$( this ).dialog("close");
+		    		 			 },
+		    		 	  "Cancel" : function() {
+		    		 	  			// restore old value to field
+		    		 	  			grid.getEditorLock().cancelCurrentEdit();
+		    		 	  			j$( this ).dialog("close");
+		    		 	  		 }
+		    		 	}
+		    		 }).text(args.validationResults.msg);
+    		});
+
             collection.fetchWithPagination();
         }
         
@@ -316,6 +346,7 @@ j$(document).ready(function() {
         <label>{!object}</label>
     </div>
     <div id="exampleGrid"></div>
+    <div id="gridErrs" title="Validation Error"></div>
     <div id="examplePager"></div>
 </div>
 
