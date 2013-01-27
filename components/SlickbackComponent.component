@@ -133,17 +133,30 @@ var SFDC_Connector = function(sobjname, fields) {
         }
     }
 
+    // when field metadata returns, store for use in inbound parser:
+    var fieldMetaData;
+    fieldData.promise().done(function(data) { fieldMetaData = data; });
+
     function parse(response) {
         // here is where we perform any translations between data returned from the
         // server and what we want to store in each model
-        // for now, just handle a (hardcoded) date field:
-        if (('Birthdate' in response) && !!response.Birthdate) {
-            // make it a Date (is a Javascript "time" on the wire!)
-            var d = new Date(parseInt(response.Birthdate));
-            response.Birthdate = new Date(d.getUTCFullYear(),
-                                          d.getUTCMonth(),
-                                          d.getUTCDate());
-        }               
+        if (!fieldMetaData) {
+            throw "Grid Error: attempting to parse server data without field metadata";
+        }
+        // for now, only date fields require special handling:
+        for (var i = 0; i < fieldMetaData.length; i++) {
+        	// see if this is a non-empty date-type field
+            if ((fieldMetaData[i].fieldType == "date") &&
+                (fieldMetaData[i].name in response) &&
+                !!response[fieldMetaData[i].name]) {
+                // make it a Date (is a Javascript "time" on the wire!)
+                var d = new Date(parseInt(response[fieldMetaData[i].name]));
+                response[fieldMetaData[i].name] =
+                        new Date(d.getUTCFullYear(),
+                                 d.getUTCMonth(),
+                                 d.getUTCDate());
+            }
+        }              
         return response;
     }
 
