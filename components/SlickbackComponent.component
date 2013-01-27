@@ -106,8 +106,8 @@ var SFDC_Connector = function(sobjname, fields) {
     function update(method, model, options) {
         // produce server-side CRUDData object
         var params = {sobjname:    sobjname,
-        			  fields:      fields,
-        			  records:     [_.extend({Id: model.id},
+        	      fields:      fields,
+        	      records:     [_.extend({Id: model.id},
         			  						  model.changedAttributes())]
         };
         SlickbackRemotingCtrl.updat(
@@ -174,13 +174,12 @@ var SFDC_Connector = function(sobjname, fields) {
                 sync:        sync,
                 parse:       parse,
                 idAttribute: "Id"
-
             });
 
     var collection = Slickback.PaginatedCollection.extend({
         model: model,
         sync: sync
-        });
+    });
 
     return {
         // public API
@@ -303,26 +302,26 @@ j$(document).ready(function() {
                 grid.render();
             });
         
-			// arrange for error reporting
-		    grid.onValidationError.subscribe(function (e, args) {
-		    	j$("#gridErrs").dialog(
-		    		{height: 100,
-		    		 resizable: false,
-		    		 modal: true,
-		    		 buttons:
-		    		 	{ "OK" : function() {
-		    		 				// ensure focus remains in edit cell
-		    		 				args.editor.focus();
-		    		 				j$( this ).dialog("close");
-		    		 			 },
-		    		 	  "Cancel" : function() {
-		    		 	  			// restore old value to field
-		    		 	  			grid.getEditorLock().cancelCurrentEdit();
-		    		 	  			j$( this ).dialog("close");
-		    		 	  		 }
-		    		 	}
-		    		 }).text(args.validationResults.msg);
-    		});
+            // arrange for error reporting
+            grid.onValidationError.subscribe(function (e, args) {
+                j$("#gridErrs").dialog(
+                    {height: 100,
+                     resizable: false,
+                     modal: true,
+                     buttons:
+                         { "OK" : function() {
+                                     // ensure focus remains in edit cell
+                                     args.editor.focus();
+                                     j$( this ).dialog("close");
+                                  },
+                           "Cancel" : function() {
+                                       // restore old value to field
+                                       grid.getEditorLock().cancelCurrentEdit();
+                                       j$( this ).dialog("close");
+                                    }
+                         }
+                     }).text(args.validationResults.msg);
+            });
 
             collection.fetchWithPagination();
         }
