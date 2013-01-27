@@ -267,7 +267,7 @@ j$(document).ready(function() {
     // of the page loading and then used when available:
     columnsPromise.done(function(columns) {
         var collection = new Collection();
-        function initializeProductsGridView(initializationOpts) {
+        function initializeGridView(initializationOpts) {
             var pagerElt  = initializationOpts.pager;
         
             var gridOptions = _.extend({},{
@@ -326,11 +326,11 @@ j$(document).ready(function() {
             collection.fetchWithPagination();
         }
         
-        var productsGridView = Backbone.View.extend({
-            initialize: initializeProductsGridView
+        var GridView = Backbone.View.extend({
+            initialize: initializeGridView
         });
         
-        var view     = new productsGridView({
+        var view     = new GridView({
             el:         '#exampleGrid',
             collection: collection,
             pager:      j$('#examplePager')
