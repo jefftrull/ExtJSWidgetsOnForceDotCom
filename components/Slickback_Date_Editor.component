@@ -1,0 +1,81 @@
+<apex:component >
+<!-- This is a component not currently present in Slickback, which has a subset of the editors present in Slickgrid -->
+<script>
+(function() {
+  "use strict";
+
+  var linkGlobal = (typeof global  === 'undefined') ? this : global;
+  var linkModule = (typeof exports === 'undefined') ? this : exports;
+
+  var Slickback =
+    linkModule.Slickback || linkGlobal.Slickback || require('../slickback'),
+    use         = Slickback.use,
+    EditorMixin = Slickback.EditorMixin;
+
+  var imported = use(linkGlobal, [
+      { symbol: '_', module: 'underscore' },
+      { symbol: '$', module: 'jquery' }
+    ]),
+    _ = imported._,
+    $ = imported.$;
+
+  var exportNamespace = Slickback;
+  
+  var calendarOpen = false;
+
+  var createDatePickerElement = function () {
+      var $input = $("<INPUT type=text class='editor-text' />");
+      $input.appendTo(this.container);
+      $input.focus().select();
+      $input.datepicker({
+        showOn: "button",
+        buttonImageOnly: true,
+        buttonImage: "{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/images/calendar.gif')}",
+        dateFormat: this.dateFormat,
+        beforeShow: function () {
+          calendarOpen = true
+        },
+        onClose: function () {
+          calendarOpen = false
+        }
+      });
+      $input.width($input.width() - 18);
+      return $input;
+    };
+
+  function DateCellEditor(args) {
+    this.container    = args.container;
+    this.column       = args.column;
+    this.dateFormat   = args.dateFormat || "mm/dd/yy";
+    this.defaultValue = null;
+    this.$input       = this.createDatePickerElement();
+  }
+
+  var loadValueFromModelWithoutFormatting = function(model) {
+    var editValue = this.unformattedModelValue(model);
+    this.defaultValue = editValue;
+    this.$input.val(editValue);
+    this.$input[0].defaultValue = editValue;
+    this.$input.select(); // ok for selects?
+  };
+
+  var serializeValue = function() {
+    return this.$input.val(); // i.e. use value
+  };
+
+  var validateAll = function() {
+    return { valid: true,  msg: null };
+  };
+
+  _.extend(DateCellEditor.prototype, EditorMixin, {
+    createDatePickerElement: createDatePickerElement,
+    loadValue:      loadValueFromModelWithoutFormatting,
+    serializeValue: serializeValue,
+    validate:       validateAll
+  });
+
+  exportNamespace.DateCellEditor = DateCellEditor;
+
+}).call(this);
+</script>
+</apex:component>

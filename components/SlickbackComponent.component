@@ -64,6 +64,8 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
 
 j$ = jQuery.noConflict();
 
+var dateFormat = "mm/dd/yy";   // controls model storage format and the format used by the date editor
+
 var SFDC_Connector = function(sobjname, fields) {
     'use strict';
 
@@ -103,13 +105,31 @@ var SFDC_Connector = function(sobjname, fields) {
             });
     }
     
+    // when field metadata returns, store for use in communicating data:
+    var fieldMetaData;
+    fieldData.promise().done(function(data) { fieldMetaData = data; });
+
     function update(method, model, options) {
         // produce server-side CRUDData object
+        var attrs = model.changedAttributes();
+
+        // reformat Date fields (stored in the model as formatted strings)
+        // to be timestamps, as required on the server
+        for (var i = 0; i < fieldMetaData.length; i++) {
+            // see if this is a non-empty date-type field
+            if ((fieldMetaData[i].fieldType == "date") &&
+                (fieldMetaData[i].name in attrs) &&
+                !!attrs[fieldMetaData[i].name]) {
+                attrs[fieldMetaData[i].name] = 
+                    j$.datepicker.parseDate(dateFormat, attrs[fieldMetaData[i].name]);
+	    }
+        }
+
         var params = {sobjname:    sobjname,
         	      fields:      fields,
-        	      records:     [_.extend({Id: model.id},
-        			  						  model.changedAttributes())]
+        	      records:     [_.extend({Id: model.id}, attrs)]
         };
+
         SlickbackRemotingCtrl.updat(
         	params,
         	function(resp, e) {
@@ -117,7 +137,7 @@ var SFDC_Connector = function(sobjname, fields) {
         			options.error(model, resp);
         			return;
         		}
-        		options.success({});  // not sure what to do here yet
+        		options.success({});
         	});
     }
 
@@ -133,10 +153,6 @@ var SFDC_Connector = function(sobjname, fields) {
         }
     }
 
-    // when field metadata returns, store for use in inbound parser:
-    var fieldMetaData;
-    fieldData.promise().done(function(data) { fieldMetaData = data; });
-
     function parse(response) {
         // here is where we perform any translations between data returned from the
         // server and what we want to store in each model
@@ -149,12 +165,14 @@ var SFDC_Connector = function(sobjname, fields) {
             if ((fieldMetaData[i].fieldType == "date") &&
                 (fieldMetaData[i].name in response) &&
                 !!response[fieldMetaData[i].name]) {
-                // make it a Date (is a Javascript "time" on the wire!)
+                // format as readable string (is a Javascript "time" on the wire!)
                 var d = new Date(parseInt(response[fieldMetaData[i].name]));
-                response[fieldMetaData[i].name] =
-                        new Date(d.getUTCFullYear(),
-                                 d.getUTCMonth(),
-                                 d.getUTCDate());
+                // fix time zone issue
+                d = new Date(d.getUTCFullYear(),
+                             d.getUTCMonth(),
+                             d.getUTCDate());
+                // stringify
+                response[fieldMetaData[i].name] = j$.datepicker.formatDate(dateFormat, d);
             }
         }              
         return response;
@@ -220,7 +238,16 @@ var SFDC_Connector = function(sobjname, fields) {
 var sfdc = SFDC_Connector('{!object}', '{!fields}');
 
 var Collection = sfdc.getCollection();
-  
+
+// define our local DateEditor which uses the format chosen above
+var ctor = function() {}
+ctor.prototype = Slickback.DateCellEditor.prototype;  // avoid calling parent ctor
+var DateEditor = function(args) {
+    // apply our format, and delegate to Slickback's DateCellEditor
+    Slickback.DateCellEditor.call(this, _.extend({dateFormat: dateFormat}, args));
+}
+DateEditor.prototype = new ctor();  // set up inheritance
+
 // when the field metadata is ready, define grid columns
 var columnsPromise = sfdc.getFieldDataPromise().pipe(
     function(fieldData) {
@@ -234,13 +261,7 @@ var columnsPromise = sfdc.getFieldDataPromise().pipe(
                 width: 150
             }
             // special treatment for some data types
-            if ((fieldData[i].fieldType == "date") || (fieldData[i].fieldType == "datetime")) {
-                col.formatter = function(row,cell,value,col,data) {
-                    var dateobj = data.get(col.field);
-                    // Let jQuery-UI do the formatting for us:
-                    return dateobj ? j$.datepicker.formatDate('mm/dd/yy', dateobj) : '';
-                }
-            } else if (fieldData[i].fieldType == "picklist") {
+            if (fieldData[i].fieldType == "picklist") {
                 col.formatter = Slickback.ChoiceFormatter;
             }
             // set up editors for modifiable fields
@@ -252,7 +273,7 @@ var columnsPromise = sfdc.getFieldDataPromise().pipe(
                 } else if (fieldData[i].fieldType == "integer") {
                     col.editor = Slickback.IntegerCellEditor;
                 } else if (fieldData[i].fieldType == "date") {
-                    col.editor = Slick.Editors.Date;  // unclear if this actually works...
+                    col.editor = DateEditor;
                 } else if (fieldData[i].fieldType == "picklist") {
                     col.editor = Slickback.DropdownCellEditor;
                     // add choice values

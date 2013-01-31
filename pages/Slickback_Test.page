@@ -29,6 +29,7 @@ Copyright 2012 Jeff Trull <jetrull@sbcglobal.net>
 <apex:includeScript value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/controls/slick.pager.js')}" />
 <!-- and SlickBack depends on Backbone, jQueryUI, and SlickGrid -->
 <apex:includeScript value="{!URLFOR($Resource.SlickBack, 'dist/slickback.min.js')}" />
+<c:Slickback_Date_Editor />
 
 <apex:styleSheet value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/slick.grid.css')}"/>
 <apex:styleSheet value="{!URLFOR($Resource.SlickBack, 'vendor/slickgrid-2.0-57c0a44/controls/slick.pager.css')}"/>
