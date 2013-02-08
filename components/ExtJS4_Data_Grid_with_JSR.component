@@ -72,23 +72,23 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
         ExtJSStoreRemotingCtrl.updat.directCfg.method.getArgs = Ext.direct.RemotingMethod.prototype.getArgs;
         ExtJSStoreRemotingCtrl.delet.directCfg.method.getArgs = Ext.direct.RemotingMethod.prototype.getArgs;
                        
-		// Force.com supplies dates as UTC datetime, which ExtJS interprets as a time, so when it displays
-		// the date it is offset by the timezone.  In the US this means it gets displayed as one day too early.
-		// Fix by supplying a custom parse/format function pair to make client dates be midnight on the chosen
-		// date at the client, while the original UTC values are stored on the server.
-		// NOTE supposedly you can also specify a "convert" function when you define the field, but for me that
-		// broke the outbound path (writing to server)
-		Ext.Date.parseFunctions["SFDC"] = function(v) {
+        // Force.com supplies dates as UTC datetime, which ExtJS interprets as a time, so when it displays
+        // the date it is offset by the timezone.  In the US this means it gets displayed as one day too early.
+        // Fix by supplying a custom parse/format function pair to make client dates be midnight on the chosen
+        // date at the client, while the original UTC values are stored on the server.
+        // NOTE supposedly you can also specify a "convert" function when you define the field, but for me that
+        // broke the outbound path (writing to server)
+        Ext.Date.parseFunctions["SFDC"] = function(v) {
                if ((v == null) || (v == ''))
                    return null;
                date_as_sent = new Date(parseInt(v));
                return new Date(date_as_sent.getUTCFullYear(),
-                 				date_as_sent.getUTCMonth(),
-                 				date_as_sent.getUTCDate());
-		};
-		// not necessary to define a parseFunction here as SFDC seems happy to accept JSON date format
+                                 date_as_sent.getUTCMonth(),
+                                 date_as_sent.getUTCDate());
+        };
+        // not necessary to define a parseFunction here as SFDC seems happy to accept JSON date format
 
-		(function() {  // protect global namespace (and other grids) from stuff local to us
+        (function() {  // protect global namespace (and other grids) from stuff local to us
 
             // use JS Remoting to get field metadata info
             // TODO check for creatability/updatability of the chosen SObject type by this user
@@ -126,9 +126,9 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                             field.dateFormat = "time";    // Force.com date serialization uses javascript time value
                             field.type = "date";
                         } else if (fieldData[i].fieldType == "date") {
-                        	field.type = "date";
-                        	field.dateFormat = "SFDC";    // use special format defined above
-                      } else if (fieldData[i].fieldType == "double") {
+                            field.type = "date";
+                            field.dateFormat = "SFDC";    // use special format defined above
+                        } else if (fieldData[i].fieldType == "double") {
                             field.type = "float";
                         } else if (fieldData[i].fieldType == "boolean") {
                             field.type = "bool";
@@ -147,7 +147,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                     // TODO add associations to other models
                     var modelName = Ext.String.capitalize("{!object}");
                     var extraParams = {sobjname: '{!object}',    // will be sent along with start, limit, etc.
-                                          fields: fieldlist.join(',')};
+                                       fields: fieldlist.join(',')};
                     Ext.define(modelName, {
                         extend: 'Ext.data.Model',
                         fields: extfields,
@@ -232,7 +232,7 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                             col.trueText = 'Yes';
                             col.falseText = 'No';
                         } else if ((fieldData[i].fieldType == "date") || (fieldData[i].fieldType == "datetime")) {
-                        	col.xtype = 'datecolumn';
+                            col.xtype = 'datecolumn';
                         }
                         // set up editors for modifiable fields
                         if (fieldData[i].modifiable) {
@@ -266,75 +266,75 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                         }
                         columns.push(col);
                     }
-					
-       				Ext.onReady(function() {  // defer creation of UI elements
-	                    var rowEditing = Ext.create('Ext.grid.plugin.RowEditing', {
-	                                        clicksToEdit: 2 // to more easily distinguish editing from row selection
-	                                    });
-	                    var grid = Ext.create('Ext.grid.Panel', {
-	                        title: modelName,
-	                        store: store,
-	                        columns: columns,
-	                        selModel: {xtype : 'rowmodel',
-	                                   mode : 'MULTI'},
-	                        collapsed: {!minimized},
-	                        collapsible: true,
-	                        listeners: {
-	                            // if we begin minimized, load upon expansion
-	                            expand: function() {
-	                                store.load();
-	                            }
-	                        },
-	                        // enable editing
-	                        plugins: [rowEditing],
-	                        // paging toolbar at bottom
-	                        bbar: Ext.create('Ext.PagingToolbar', {
-	                            store: store,
-	                            displayInfo: true,
-	                            displayMsg: 'Displaying objects {0} - {1} of {2}',
-	                            emptyMsg: 'no records found'
-	                        }),
-	                        // add/delete buttons at top
-	                        dockedItems: [{
-	                            xtype: 'toolbar',
-	                            items: [{
-	                                text: 'Add',
-	                                iconCls: 'icon-add',
-	                                handler: function(){
-	                                    // empty record
-	                                    // TODO insert default field values, if any (Field can take one, will that do?)
-	                                    store.insert(0, Ext.create(modelName, {}));
-	                                    rowEditing.startEdit(0, 0);
-	                                }
-	                            }, '-', {
-	                                itemId: 'delete',
-	                                text: 'Delete',
-	                                iconCls: 'icon-delete',
-	                                disabled: true,
-	                                handler: function(){
-	                                    var selections = grid.getView().getSelectionModel().getSelection();
-	                                    if (selections) {
-	                                        // verify the user wants to do this
-	                                        Ext.Msg.show({title: 'Delete Rows',
-	                                                      msg: String.format('Remove these {0} entries from {1}?',
-	                                                                         selections.length, modelName),
-	                                                      buttons: Ext.Msg.OKCANCEL,
-	                                                      fn: function(btn, txt) {
-	                                                            if (btn == 'ok') {
-	                                                                store.remove(selections);
-	                                                            }
-	                                                      }});
-	                                    }
-	                                }
-	                            }]
-	                        }],
-	                        height: 460,
-	                        renderTo: '{!$Component.myGrid}'
-	                    });
-	                    // disable delete button if no row is selected
-	                    grid.getSelectionModel().on('selectionchange', function(selModel, selections){
-	                        grid.down('#delete').setDisabled(selections.length === 0);
-	                    });
+                    
+                    Ext.onReady(function() {  // defer creation of UI elements
+                        var rowEditing = Ext.create('Ext.grid.plugin.RowEditing', {
+                                            clicksToEdit: 2 // to more easily distinguish editing from row selection
+                                        });
+                        var grid = Ext.create('Ext.grid.Panel', {
+                            title: modelName,
+                            store: store,
+                            columns: columns,
+                            selModel: {xtype : 'rowmodel',
+                                       mode : 'MULTI'},
+                            collapsed: {!minimized},
+                            collapsible: true,
+                            listeners: {
+                                // if we begin minimized, load upon expansion
+                                expand: function() {
+                                    store.load();
+                                }
+                            },
+                            // enable editing
+                            plugins: [rowEditing],
+                            // paging toolbar at bottom
+                            bbar: Ext.create('Ext.PagingToolbar', {
+                                store: store,
+                                displayInfo: true,
+                                displayMsg: 'Displaying objects {0} - {1} of {2}',
+                                emptyMsg: 'no records found'
+                            }),
+                            // add/delete buttons at top
+                            dockedItems: [{
+                                xtype: 'toolbar',
+                                items: [{
+                                    text: 'Add',
+                                    iconCls: 'icon-add',
+                                    handler: function(){
+                                        // empty record
+                                        // TODO insert default field values, if any (Field can take one, will that do?)
+                                        store.insert(0, Ext.create(modelName, {}));
+                                        rowEditing.startEdit(0, 0);
+                                    }
+                                }, '-', {
+                                    itemId: 'delete',
+                                    text: 'Delete',
+                                    iconCls: 'icon-delete',
+                                    disabled: true,
+                                    handler: function(){
+                                        var selections = grid.getView().getSelectionModel().getSelection();
+                                        if (selections) {
+                                            // verify the user wants to do this
+                                            Ext.Msg.show({title: 'Delete Rows',
+                                                          msg: String.format('Remove these {0} entries from {1}?',
+                                                                             selections.length, modelName),
+                                                          buttons: Ext.Msg.OKCANCEL,
+                                                          fn: function(btn, txt) {
+                                                                if (btn == 'ok') {
+                                                                    store.remove(selections);
+                                                                }
+                                                          }});
+                                        }
+                                    }
+                                }]
+                            }],
+                            height: 460,
+                            renderTo: '{!$Component.myGrid}'
+                        });
+                        // disable delete button if no row is selected
+                        grid.getSelectionModel().on('selectionchange', function(selModel, selections){
+                            grid.down('#delete').setDisabled(selections.length === 0);
+                        });
                     
                     });
             });
