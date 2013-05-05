@@ -1,10 +1,10 @@
 <!-- Example usage of grid component -->
 <apex:page >
     <!-- load ExtJS -->
-    <apex:stylesheet value="{!$Resource.ExtJS4}/extjs-4.1.0/resources/css/ext-all.css" />
-    <apex:includeScript value="{!$Resource.ExtJS4}/extjs-4.1.0/ext-all.js"/>       
+    <apex:stylesheet value="{!$Resource.ExtJS42}/ext-4.2.0.663/resources/css/ext-all.css" />
+    <apex:includeScript value="{!$Resource.ExtJS42}/ext-4.2.0.663/ext-all.js"/>       
     <script type="text/javascript">
-        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS4}/extjs-4.1.0/resources/themes/images/default/tree/s.gif"
+        Ext.BLANK_IMAGE_URL="{!$Resource.ExtJS42}/ext-4.2.0.663/resources/themes/images/default/tree/s.gif"
     </script>
 
     <!-- Note REST version of component seems to have some problem with >1 on a page... not yet diagnosed -->

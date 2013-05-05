@@ -27,11 +27,11 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
     <style type="text/css">
         .icon-add
         {
-            background:url({!$Resource.ExtJS4}/extjs-4.1.0/examples/shared/icons/fam/add.gif) 0 no-repeat !important
+            background:url({!$Resource.ExtJS42}/ext-4.2.0.663/examples/shared/icons/fam/add.gif) 0 no-repeat !important
         }
         .icon-delete
         {
-            background:url({!$Resource.ExtJS4}/extjs-4.1.0/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
+            background:url({!$Resource.ExtJS42}/ext-4.2.0.663/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
         }
     </style>
 
@@ -127,7 +127,8 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
                             field.type = "date";
                         } else if (fieldData[i].fieldType == "date") {
                             field.type = "date";
-                            field.dateFormat = "SFDC";    // use special format defined above
+                            field.dateReadFormat = "SFDC";    // use special format defined above
+                            field.dateWriteFormat = "c";      // ISO 8601
                         } else if (fieldData[i].fieldType == "double") {
                             field.type = "float";
                         } else if (fieldData[i].fieldType == "boolean") {
