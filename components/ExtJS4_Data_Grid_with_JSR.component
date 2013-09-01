@@ -27,11 +27,11 @@ Copyright 2011 Jeff Trull <jetrull@sbcglobal.net>
     <style type="text/css">
         .icon-add
         {
-            background:url({!$Resource.ExtJS42}/ext-4.2.0.663/examples/shared/icons/fam/add.gif) 0 no-repeat !important
+            background:url({!$Resource.ExtJS42}/ext-4.2.1.883/examples/shared/icons/fam/add.gif) 0 no-repeat !important
         }
         .icon-delete
         {
-            background:url({!$Resource.ExtJS42}/ext-4.2.0.663/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
+            background:url({!$Resource.ExtJS42}/ext-4.2.1.883/examples/shared/icons/fam/delete.gif) 0 no-repeat !important
         }
     </style>
 
